@@ -42,7 +42,7 @@ preferences {
 
 
 /* Preferences */
-def prefLogIn() {    
+def prefLogIn() {
     state.previousVersion = state.thisSmartAppVersion
     if (state.previousVersion == null){
     	state.previousVersion = 0;
@@ -223,16 +223,6 @@ def uninstalled() {
 def initialize() {
 	unsubscribe()
     log.debug "Initializing..."    
-        
-    
-
-    // Get initial device status in state.data
-	state.polling = [ last: 0, rescheduler: now() ]
-	state.data = [:]
-    
-    // Create selected devices
-	def doorsList = getDoorList()
-	def lightsList = state.lightList
     
     //Mark sensors onto state door data
     def doorSensorCounter = 1
@@ -246,12 +236,13 @@ def initialize() {
     //Create door devices
     def doorCounter = 1
     state.validatedDoors.each{ door ->
-        createChilDevices(door, settings[state.data[door].sensor], doorsList[door], settings["prefDoor${doorCounter}PushButtons"])
+        createChilDevices(door, settings[state.data[door].sensor], state.data[door].name, settings["prefDoor${doorCounter}PushButtons"])
         doorCounter++
     }
 
 
     //Create light devices
+    def lightsList = state.lightList
     def selectedLights = getSelectedDevices("lights")
     selectedLights.each {
     	log.debug "Checking for existing light: " + it
