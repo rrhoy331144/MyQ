@@ -162,8 +162,8 @@ def sensorPage() {
         def sensorCounter = 1
         state.validatedDoors.each{ door ->                
             section("Setup options for " + state.data[door].name){
-                input(name: "door${sensorCounter}Sensor", title: state.data[door].name + " Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-                input "prefDoor1PushButtons", "bool", required: false, title: "Create on/off push buttons?"
+                input "door${sensorCounter}Sensor",  "capability.contactSensor", required: false, multiple: false, title: state.data[door].name + " Contact Sensor"
+                input "prefDoor${sensorCounter}PushButtons", "bool", required: false, title: "Create on/off push buttons?"
             }
             sensorCounter++
         }
@@ -187,7 +187,7 @@ def summary() {
 def installed() {
 	if (door1Sensor && state.validatedDoors){
     	refreshAll()
-        unschedule()
+        unschedule()    	
     }
 }
 
@@ -243,8 +243,11 @@ def initialize() {
         }
     }
     
-    state.validatedDoors.each{ door -> 
-        createChilDevices(door, settings[state.data[door].sensor], doorsList[door], '')
+    //Create door devices
+    def doorCounter = 1
+    state.validatedDoors.each{ door ->
+        createChilDevices(door, settings[state.data[door].sensor], doorsList[door], settings["prefDoor${doorCounter}PushButtons"])
+        doorCounter++
     }
 
 
@@ -293,7 +296,7 @@ def initialize() {
     }
 
     //Set initial values
-    if (door1Sensor && state.validatedDoors){
+    if (state.validatedDoors){
     	log.debug "Doing the sync"
     	syncDoorsWithSensors()
     }    
@@ -472,7 +475,7 @@ def syncDoorsWithSensors(child){
     // refresh only the requesting door (makes things a bit more efficient if you have more than 1 door
     if (child) { 
     	def doorDNI = child.device.deviceNetworkId
-        log.debug 'got DNI for ' + child + ' - ' + doorDNI        
+        log.debug "got DNI for ${child}: ${doorDNI}"        
         updateDoorStatus(doorDNI, settings[state.data[doorDNI].sensor], '', '', child)
     }
     
@@ -543,9 +546,7 @@ def refresh(child){
 }
 
 def refreshAll(){
-	getChildDevices().each{
-    	syncDoorsWithSensors(it)
-    }
+    syncDoorsWithSensors()
 }
 
 def refreshAll(evt){
