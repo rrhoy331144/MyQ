@@ -34,14 +34,7 @@ definition(
 preferences {
 	page(name: "prefLogIn", title: "MyQ")
 	page(name: "prefListDevices", title: "MyQ")
-    page(name: "prefSensor1", title: "MyQ")
-    page(name: "prefSensor2", title: "MyQ")
-    page(name: "prefSensor3", title: "MyQ")
-    page(name: "prefSensor4", title: "MyQ")
-    page(name: "prefSensor5", title: "MyQ")
-    page(name: "prefSensor6", title: "MyQ")
-    page(name: "prefSensor7", title: "MyQ")
-    page(name: "prefSensor8", title: "MyQ")
+    page(name: "sensorPage", title: "MyQ")    
     page(name: "noDoorsSelected", title: "MyQ")
     page(name: "summary", title: "MyQ")
     page(name: "prefUninstall", title: "MyQ")
@@ -49,8 +42,8 @@ preferences {
 
 
 /* Preferences */
-def prefLogIn() {
-	state.previousVersion = state.thisSmartAppVersion
+def prefLogIn() {    
+    state.previousVersion = state.thisSmartAppVersion
     if (state.previousVersion == null){
     	state.previousVersion = 0;
     }
@@ -95,12 +88,12 @@ def prefUninstall() {
 }
 
 def prefListDevices() {
-	getVersionInfo(0, 0);
+    getVersionInfo(0, 0);
     getSelectedDevices("lights")
     if (forceLogin()) {
 		def doorList = getDoorList()
 		if ((state.doorList) || (state.lightList)){
-        	def nextPage = "prefSensor1"
+        	def nextPage = "sensorPage"
             if (!state.doorList){nextPage = "summary"}  //Skip to summary if there are no doors to handle
                 return dynamicPage(name: "prefListDevices",  title: "Devices", nextPage:nextPage, install:false, uninstall:true) {
                     if (state.doorList) {
@@ -141,7 +134,7 @@ def prefListDevices() {
 }
 
 
-def prefSensor1() {
+def sensorPage() {
     log.debug "Doors chosen: " + doors
 
     //Sometimes ST has an issue where stale options are not properly dropped from settings. Let's get a true count of valid doors selected
@@ -159,204 +152,22 @@ def prefSensor1() {
 
     log.debug "Valid doors chosen: " + state.validatedDoors
 
-    //Set defaults
-    def nextPage = "summary"
-    def titleText = ""
-
-    //If no doors chosen, skip to summary
-    if (!state.validatedDoors){
-        return dynamicPage(name: "noDoorsSelected",  title: "No doors selected. Tap next to finish.", nextPage:nextPage, install:false, uninstall:true) {
-            section(titleText){
-                paragraph "No doors selected. Tap next to finish"
-            }
+    return dynamicPage(name: "sensorPage",  title: "Optional Sensors and Push Buttons", nextPage:"summary", install:false, uninstall:true) {                
+        section("Sensor setup"){
+        	paragraph "For each door below, you can specify an optional sensor that allows the device type to know whether the door is open or closed. This helps the device function as a switch " +
+            	"you can turn on (to open) and off (to close) in other automations and SmartApps."
+           	paragraph "Alternatively, you can choose the other option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
+            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details"
         }
-    }
-
-
-    //Determine if we have multiple doors and need to send to another page
-    if (doors instanceof String){ //simulator seems to just make a single door a string. For that reason we have this weird check.
-        log.debug "Single door detected (string)."
-        titleText = "Select Sensors for Door 1 (" + state.data[doors].name + ")"
-    }
-    else if (doors.size() == 1){
-        log.debug "Single door detected (array)."
-        titleText = "Select Sensors for Door 1 (" + state.data[doors[0]].name + ")"
-    }
-    else{
-        log.debug "Multiple doors detected."
-        log.debug state.validatedDoors[0]
-        nextPage = "prefSensor2"
-        titleText = "OPTIONAL: Select Sensors for Door 1 (" + state.data[state.validatedDoors[0]].name + ")"
-    }
-
-
-    return dynamicPage(name: "prefSensor1",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-			paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-            input(name: "door1Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door1Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor1PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor2() {
-    def nextPage = "summary"
-    def titleText = "Sensors for Door 2 (" + state.data[state.validatedDoors[1]].name + ")"
-
-    if (state.validatedDoors.size() > 2){
-    	nextPage = "prefSensor3"
-    }
-
-    return dynamicPage(name: "prefSensor2",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door2Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door2Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor2PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor3() {
-    def nextPage = "summary"
-    def titleText = "Sensors for Door 3 (" + state.data[state.validatedDoors[2]].name + ")"
-
-    if (state.validatedDoors.size() > 3){
-    	nextPage = "prefSensor4"
-    }
-
-    return dynamicPage(name: "prefSensor3",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door3Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door3Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor3PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor4() {
-    def nextPage = "summary"
-    def titleText = "Sensors for Door 4 (" + state.data[state.validatedDoors[3]].name + ")"
-
-    if (state.validatedDoors.size() > 4){
-    	nextPage = "prefSensor5"
-    }
-
-    return dynamicPage(name: "prefSensor4",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door4Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door4Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor4PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor5() {
-    def nextPage = "summary"
-    def titleText = "Sensors for Door 5 (" + state.data[state.validatedDoors[4]].name + ")"
-
-    if (state.validatedDoors.size() > 5){
-    	nextPage = "prefSensor6"
-    }
-
-    return dynamicPage(name: "prefSensor5",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door5Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door5Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor5PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor6() {
-    def nextPage = "summary"
-    def titleText = "Sensors for Door 6 (" + state.data[state.validatedDoors[5]].name + ")"
-
-    if (state.validatedDoors.size() > 6){
-    	nextPage = "prefSensor7"
-    }
-
-    return dynamicPage(name: "prefSensor6",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door6Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door6Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor6PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor7() {
-    def nextPage = "summary"
-    def titleText = "Sensors for Door 7 (" + state.data[state.validatedDoors[6]].name + ")"
-
-    if (state.validatedDoors.size() > 7){
-    	nextPage = "prefSensor8"
-    }
-
-    return dynamicPage(name: "prefSensor7",  title: "Optional Sensors and Push Buttons", nextPage:nextPage, install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door7Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
-			input(name: "door7Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor7PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
-    }
-}
-
-def prefSensor8() {
-	def titleText = "Contact Sensor for Door 8 (" + state.data[state.validatedDoors[7]].name + ")"
-    return dynamicPage(name: "prefSensor8",  title: "Optional Sensors and Push Buttons", nextPage:"summary", install:false, uninstall:true) {
-        section(titleText){
-            paragraph "Optional: If you have sensors on this door, select them below. A sensor allows the device type to know whether the door is open or closed, which helps the device function " +
-            	"as a switch you can turn on (to open) and off (to close). Note: if you choose an acceleration sensor, you must also choose a contact sensor."
-			input(name: "door8Sensor", title: "Contact Sensor", type: "capability.contactSensor", required: "false", multiple: "false")
-			input(name: "door8Acceleration", title: "Acceleration Sensor", type: "capability.accelerationSensor", required: false, multiple: false)
-		}
-        section("Create separate on/off push buttons?"){
-			paragraph "Choose the option below to have separate additional On and Off push button devices created. This is recommened if you have no sensors but still want a way to open/close the " +
-            "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details."
-            input "prefDoor4PushButtons", "bool", required: false, title: "Create on/off push buttons?"
-		}
+        def sensorCounter = 1
+        state.validatedDoors.each{ door ->                
+            section("Setup options for " + state.data[door].name){
+                input(name: "door${sensorCounter}Sensor", title: state.data[door].name + " Contact Sensor", type: "capability.contactSensor", required: false, multiple: false)
+                input "prefDoor1PushButtons", "bool", required: false, title: "Create on/off push buttons?"
+            }
+            sensorCounter++
+        }
+          
     }
 }
 
@@ -377,7 +188,6 @@ def installed() {
 	if (door1Sensor && state.validatedDoors){
     	refreshAll()
         unschedule()
-    	runEvery30Minutes(refreshAll)
     }
 }
 
@@ -412,34 +222,31 @@ def uninstalled() {
 
 def initialize() {
 	unsubscribe()
-    log.debug "Initializing..."
-    login()
-    state.sensorMap = [:]
+    log.debug "Initializing..."    
+        
+    
 
     // Get initial device status in state.data
 	state.polling = [ last: 0, rescheduler: now() ]
 	state.data = [:]
-
-	// Create selected devices
+    
+    // Create selected devices
 	def doorsList = getDoorList()
 	def lightsList = state.lightList
-
-    if (doors != null){
-        def firstDoor = state.validatedDoors[0]
-        //Handle single door (sometimes it's just a dumb string thanks to the simulator)
-        if (doors instanceof String)
-        firstDoor = doors
-
-        //Create door devices
-        createChilDevices(firstDoor, door1Sensor, doorsList[firstDoor], prefDoor1PushButtons)
-        if (state.validatedDoors[1]) createChilDevices(state.validatedDoors[1], door2Sensor, doorsList[state.validatedDoors[1]], prefDoor2PushButtons)
-        if (state.validatedDoors[2]) createChilDevices(state.validatedDoors[2], door3Sensor, doorsList[state.validatedDoors[2]], prefDoor3PushButtons)
-        if (state.validatedDoors[3]) createChilDevices(state.validatedDoors[3], door4Sensor, doorsList[state.validatedDoors[3]], prefDoor4PushButtons)
-        if (state.validatedDoors[4]) createChilDevices(state.validatedDoors[4], door5Sensor, doorsList[state.validatedDoors[4]], prefDoor5PushButtons)
-        if (state.validatedDoors[5]) createChilDevices(state.validatedDoors[5], door6Sensor, doorsList[state.validatedDoors[5]], prefDoor6PushButtons)
-        if (state.validatedDoors[6]) createChilDevices(state.validatedDoors[6], door7Sensor, doorsList[state.validatedDoors[6]], prefDoor7PushButtons)
-        if (state.validatedDoors[7]) createChilDevices(state.validatedDoors[7], door8Sensor, doorsList[state.validatedDoors[7]], prefDoor8PushButtons)
+    
+    //Mark sensors onto state door data
+    def doorSensorCounter = 1
+    state.validatedDoors.each{ door ->    	
+        if (settings["door${doorSensorCounter}Sensor"]){        	
+            state.data[door].sensor = "door${doorSensorCounter}Sensor"
+            doorSensorCounter++
+        }
     }
+    
+    state.validatedDoors.each{ door -> 
+        createChilDevices(door, settings[state.data[door].sensor], doorsList[door], '')
+    }
+
 
     //Create light devices
     def selectedLights = getSelectedDevices("lights")
@@ -485,51 +292,18 @@ def initialize() {
         }
     }
 
-    //Create subscriptions
-    if (door1Sensor)
-        subscribe(door1Sensor, "contact", sensorHandler)
-    if (door2Sensor)
-        subscribe(door2Sensor, "contact", sensorHandler)
-    if (door3Sensor)
-        subscribe(door3Sensor, "contact", sensorHandler)
-    if (door4Sensor)
-        subscribe(door4Sensor, "contact", sensorHandler)
-    if (door5Sensor)
-        subscribe(door5Sensor, "contact", sensorHandler)
-    if (door6Sensor)
-        subscribe(door6Sensor, "contact", sensorHandler)
-    if (door7Sensor)
-        subscribe(door7Sensor, "contact", sensorHandler)
-    if (door8Sensor)
-        subscribe(door8Sensor, "contact", sensorHandler)
-
-    if (door1Acceleration)
-        subscribe(door1Acceleration, "acceleration", sensorHandler)
-    if (door2Acceleration)
-        subscribe(door2Acceleration, "acceleration", sensorHandler)
-    if (door3Acceleration)
-        subscribe(door3Acceleration, "acceleration", sensorHandler)
-    if (door4Acceleration)
-        subscribe(door4Acceleration, "acceleration", sensorHandler)
-    if (door5Acceleration)
-        subscribe(door5Acceleration, "acceleration", sensorHandler)
-    if (door6Acceleration)
-        subscribe(door6Acceleration, "acceleration", sensorHandler)
-    if (door7Acceleration)
-        subscribe(door7Acceleration, "acceleration", sensorHandler)
-    if (door8Acceleration)
-        subscribe(door8Acceleration, "acceleration", sensorHandler)
-
     //Set initial values
     if (door1Sensor && state.validatedDoors){
     	log.debug "Doing the sync"
     	syncDoorsWithSensors()
+    }    
+    
+    //Subscribe to sensor events
+    settings.each{ key, val->    	                
+        if (key.contains('Sensor')){
+        	subscribe(val, "contact", sensorHandler)
+        }
     }
-
-    //Force a refresh sync with sensors on mode change and each day at sunrise and sunset (in cases where the devices become out of sync)
-    subscribe(location, "mode", refreshAll)
-    subscribe(location, "sunset", refreshAll)
-    subscribe(location, "sunrise", refreshAll)
 }
 
 def createChilDevices(door, sensor, doorName, prefPushButtons){
@@ -694,45 +468,19 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 
 
 def syncDoorsWithSensors(child){
-    def firstDoor = state.validatedDoors[0]
-
-    //Handle single door (sometimes it's just a dumb string thanks to the simulator)
-    if (doors instanceof String)
-    firstDoor = doors
-
-    def doorDNI = null
-    if (child) {								// refresh only the requesting door (makes things a bit more efficient if you have more than 1 door
-    	doorDNI = child.device.deviceNetworkId
-        switch (doorDNI) {
-        	case firstDoor:
-            	updateDoorStatus(firstDoor, door1Sensor, door1Acceleration, door1ThreeAxis, child)
-                break
-            case state.validatedDoors[1]:
-            	updateDoorStatus(state.validatedDoors[1], door2Sensor, door2Acceleration, door2ThreeAxis, child)
-                break
-            case state.validatedDoors[2]:
-            	updateDoorStatus(state.validatedDoors[2], door3Sensor, door3Acceleration, door3ThreeAxis, child)
-                break
-            case state.validatedDoors[3]:
-            	updateDoorStatus(state.validatedDoors[3], door4Sensor, door4Acceleration, door4ThreeAxis, child)
-            case state.validatedDoors[4]:
-            	updateDoorStatus(state.validatedDoors[4], door5Sensor, door5Acceleration, door5ThreeAxis, child)
-            case state.validatedDoors[5]:
-            	updateDoorStatus(state.validatedDoors[5], door6Sensor, door6Acceleration, door6hreeAxis, child)
-            case state.validatedDoors[6]:
-            	updateDoorStatus(state.validatedDoors[6], door7Sensor, door7Acceleration, door7ThreeAxis, child)
-            case state.validatedDoors[7]:
-            	updateDoorStatus(state.validatedDoors[7], door8Sensor, door8Acceleration, door8ThreeAxis, child)
-     	}
-    } else {    					// refresh ALL the doors
-		if (firstDoor) updateDoorStatus(firstDoor, door1Sensor, door1Acceleration, door1ThreeAxis, null)
-		if (state.validatedDoors[1]) updateDoorStatus(state.validatedDoors[1], door2Sensor, door2Acceleration, door2ThreeAxis, null)
-		if (state.validatedDoors[2]) updateDoorStatus(state.validatedDoors[2], door3Sensor, door3Acceleration, door3ThreeAxis, null)
-		if (state.validatedDoors[3]) updateDoorStatus(state.validatedDoors[3], door4Sensor, door4Acceleration, door4ThreeAxis, null)
-        if (state.validatedDoors[4]) updateDoorStatus(state.validatedDoors[4], door5Sensor, door5Acceleration, door5ThreeAxis, null)
-        if (state.validatedDoors[5]) updateDoorStatus(state.validatedDoors[5], door6Sensor, door6Acceleration, door6ThreeAxis, null)
-        if (state.validatedDoors[6]) updateDoorStatus(state.validatedDoors[6], door7Sensor, door7Acceleration, door7ThreeAxis, null)
-        if (state.validatedDoors[7]) updateDoorStatus(state.validatedDoors[7], door8Sensor, door8Acceleration, door8ThreeAxis, null)
+    
+    // refresh only the requesting door (makes things a bit more efficient if you have more than 1 door
+    if (child) { 
+    	def doorDNI = child.device.deviceNetworkId
+        log.debug 'got DNI for ' + child + ' - ' + doorDNI        
+        updateDoorStatus(doorDNI, settings[state.data[doorDNI].sensor], '', '', child)
+    }
+    
+    //Otherwise, refresh everything
+    else{
+        state.validatedDoors.each { door ->        	
+        	updateDoorStatus(door, settings[state.data[door].sensor], '', '', '')            
+        }
     }
 }
 
@@ -743,6 +491,7 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
             return 0
 
         //Get door to update and set the new value
+        log.debug "Updating door status for door ${doorDNI}"
         def doorToUpdate = getChildDevice(doorDNI)
         def doorName = "unknown"
         if (state.data[doorDNI]){
@@ -752,23 +501,8 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
         def value = "unknown"
         def moving = "unknown"
         def door = doorToUpdate.latestValue("door")
-
-        if (acceleration) moving = acceleration.latestValue("acceleration")
-        if (sensor) value = sensor.latestValue("contact")
-
-        if (moving == "active") {
-            if (value == "open") {
-                if (door != "opening") value = "closing" else value = "opening"  // if door is "open" or "waiting" change to "closing", else it must be "opening"
-            } else if (value == "closed") {
-                if (door != "closing") 	value = "opening" else value = "closed"
-            }
-        } else if (moving == "inactive") {
-            if (door == "closing") {
-                if (value == "open") { 	// just stopped but door is still open
-                    value = "stopped"
-                }
-            }
-        }
+        
+        value = sensor.latestValue("contact")
 
         doorToUpdate.updateDeviceStatus(value)
         doorToUpdate.updateDeviceSensor("${sensor} is ${sensor?.currentContact}")
@@ -778,13 +512,7 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
         //Write to child log if this was initiated from one of the doors
         if (child)
             child.log("Door: " + doorName + ": Updating with status - " + value + " -  from sensor " + sensor)
-
-        if (acceleration) {
-            doorToUpdate.updateDeviceMoving("${acceleration} is ${moving}")
-            log.debug "Door: " + doorName + ": Updating with status - " + moving + " - from sensor " + acceleration
-            if (child)
-                child.log("Door: " + doorName + ": Updating with status - " + moving + " - from sensor " + acceleration)
-        }
+        
 
         //Get latest activity timestamp for the sensor (data saved for up to a week)
         def eventsSinceYesterday = sensor.eventsSince(new Date() - 7)
@@ -825,53 +553,12 @@ def refreshAll(evt){
 }
 
 def sensorHandler(evt) {
-    log.debug "Sensor change detected: Event name  " + evt.name + " value: " + evt.value   + " deviceID: " + evt.deviceId
-
-	//If we're seeing vibration sensor values, ignore them if it's been more than 30 seconds after a command was sent.
-    // This keeps us from seeing phantom entries from overly-sensitive sensors
-	if (evt.value == "active" || evt.value == "inactive"){
-		if (state.lastCommandSent == null || state.lastCommandSent > now()-30000){
-    		return 0;
-    	}
-	}
-
-    switch (evt.deviceId) {
-    	case door1Sensor.id:
-        case door1Acceleration?.id:
-            def firstDoor = state.validatedDoors[0]
-			if (doors instanceof String) firstDoor = doors
-        	updateDoorStatus(firstDoor, door1Sensor, door1Acceleration, door1ThreeAxis, null)
-            break
-    	case door2Sensor?.id:
-        case door2Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[1], door2Sensor, door2Acceleration, door2ThreeAxis, null)
-            break
-        case door3Sensor?.id:
-        case door3Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[2], door3Sensor, door3Acceleration, door3ThreeAxis, null)
-            break
-    	case door4Sensor?.id:
-        case door4Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[3], door4Sensor, door4Acceleration, door4ThreeAxis, null)
-            break
-        case door5Sensor?.id:
-        case door5Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[4], door5Sensor, door5Acceleration, door5ThreeAxis, null)
-            break
-        case door6Sensor?.id:
-        case door6Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[5], door6Sensor, door6Acceleration, door6ThreeAxis, null)
-            break
-        case door7Sensor?.id:
-        case door7Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[6], door7Sensor, door7Acceleration, door7ThreeAxis, null)
-            break
-        case door8Sensor?.id:
-        case door8Acceleration?.id:
-        	updateDoorStatus(state.validatedDoors[7], door8Sensor, door8Acceleration, door8ThreeAxis, null)
-            break
-        default:
-			syncDoorsWithSensors()
+    log.debug "Sensor change detected: Event name  " + evt.name + " value: " + evt.value   + " deviceID: " + evt.deviceId    
+    
+    state.validatedDoors.each{ door -> 
+    	if (settings[state.data[door].sensor].id == evt.deviceId)
+            log.debug "Updating door status ${door} , ${settings[state.data[door].sensor]}"
+            updateDoorStatus(door, settings[state.data[door].sensor], '', '', null)
     }
 }
 
@@ -944,7 +631,7 @@ private getDoorList() {
 			response.data.Devices.each { device ->
 				// 2 = garage door, 5 = gate, 7 = MyQGarage(no gateway), 9 = commercial door, 17 = Garage Door Opener WGDO
 				if (device.MyQDeviceTypeId == 2||device.MyQDeviceTypeId == 5||device.MyQDeviceTypeId == 7||device.MyQDeviceTypeId == 17||device.MyQDeviceTypeId == 9) {
-					log.debug "Found door: " + device.MyQDeviceId
+					//log.debug "Found door: " + device.MyQDeviceId
                     def dni = [ app.id, "GarageDoorOpener", device.MyQDeviceId ].join('|')
 					def description = ''
                     def doorState = ''
@@ -993,7 +680,7 @@ private getDoorList() {
                         log.debug "Storing door info: " + description + "type: " + device.MyQDeviceTypeId + " status: " + doorState +  " type: " + device.MyQDeviceTypeName
                         deviceList[dni] = description
                         state.doorList[dni] = description
-                        state.data[dni] = [ status: doorState, lastAction: updatedTime, name: description, type: device.MyQDeviceTypeId ]
+                        state.data[dni] = [ status: doorState, lastAction: updatedTime, name: description, type: device.MyQDeviceTypeId, sensor: '']
                     }
                     else{
                     	log.debug "Door " + device.MyQDeviceId + " has blank desc field. This is unusual..."
@@ -1002,7 +689,7 @@ private getDoorList() {
 
                 //Lights!
                 if (device.MyQDeviceTypeId == 3) {
-					log.debug "Found light: " + device.MyQDeviceId
+					//log.debug "Found light: " + device.MyQDeviceId
                     def dni = [ app.id, "LightController", device.MyQDeviceId ].join('|')
 					def description = ''
                     def lightState = ''
@@ -1131,7 +818,7 @@ private apiGet(apiPath, apiQuery = [], callback = {}) {
 
     try {
         httpGet([ uri: getApiURL(), path: apiPath, headers: myHeaders, query: apiQuery ]) { response ->
-            log.debug "Got GET response: Retry: ${atomicState.retryCount} of ${MAX_RETRIES}\nSTATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
+            //log.debug "Got GET response: Retry: ${atomicState.retryCount} of ${MAX_RETRIES}\nSTATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
             if (response.status == 200) {
                 switch (response.data.ReturnCode as Integer) {
                     case -3333: // Login again
@@ -1224,7 +911,7 @@ private apiPostLogin(apiPath, apiBody = [], callback = {}) {
 
     try {
         return httpPost([ uri: getApiURL(), path: apiPath, headers: myHeaders, body: apiBody ]) { response ->
-            log.debug "Got LOGIN POST response: STATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
+            //log.debug "Got LOGIN POST response: STATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
             if (response.status == 200) {
                 switch (response.data.ReturnCode as Integer) {
                     case 0: // Process response
@@ -1325,12 +1012,12 @@ def responseHandlerMethod(response, data) {
         state.latestLightVersion = results.LightDevice;
     }
 
-    log.debug "previousVersion: " + state.previousVersion
+    /*log.debug "previousVersion: " + state.previousVersion
     log.debug "installedVersion: " + state.thisSmartAppVersion
     log.debug "latestVersion: " + state.latestSmartAppVersion
     log.debug "doorVersion: " + state.latestDoorVersion
     log.debug "doorNoSensorVersion: " + state.latestDoorNoSensorVersion
-    log.debug "lightVersion: " + state.latestLightVersion
+    log.debug "lightVersion: " + state.latestLightVersion*/
 }
 
 def versionCheck(){
