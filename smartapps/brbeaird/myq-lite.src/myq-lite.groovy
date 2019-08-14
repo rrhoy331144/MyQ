@@ -301,7 +301,7 @@ def initialize() {
 }
 
 def createChilDevices(door, sensor, doorName, prefPushButtons){
-	log.debug "In CreateChild"
+	log.debug "In CreateChild for ${doorName}"
     def sensorTypeName = "MyQ Garage Door Opener"
     def noSensorTypeName = "MyQ Garage Door Opener-NoSensor"
     def lockTypeName = "MyQ Lock Door"
@@ -310,10 +310,33 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
         //Has door's child device already been created?
         def existingDev = getChildDevice(door)
         def existingType = existingDev?.typeName
+        
+        
 
         if (existingDev){
         	log.debug "Child already exists for " + doorName + ". Sensor name is: " + sensor
             state.installMsg = state.installMsg + doorName + ": door device already exists. \r\n\r\n"
+            
+            //Verify door's MyQ device ID
+            def myQDeviceId = existingDev?.latestValue("myQDoorId")
+            log.debug "existing door MyQDeviceId: ${myQDeviceId}"
+            if (!myQDeviceId){
+                log.debug "setting door's deviceID to ${door}"
+                existingDev.updateMyQDoorId(door)
+            }
+
+            //Door's MyQ ID is no longer valid. Try and resolve using door name
+            else{                
+                if (!state.data[door]){
+                log.debug "Warning: door's MyQ ID is no longer valid! Trying to resolve..."
+                    state.data.each { myQData ->
+                        if (myQData.name == doorName){
+                            log.debug "Successful ID search: setting door's deviceID to ${state.data[door].myQDeviceId}"
+                            existingDev.updateMyQDoorId(myQData.myQDeviceId)                    
+                        }                    
+                    }
+                }
+            }
 
             if (prefUseLockType && existingType != lockTypeName){
                 try{
@@ -355,11 +378,13 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
         }
         else{
             log.debug "Creating child door device " + door
+            def childDoor
 
                 if (prefUseLockType){
                 try{
                         log.debug "Creating door with lock type"
-                        addChildDevice("brbeaird", lockTypeName, door, getHubID(), ["name": doorName])
+                        childDoor = addChildDevice("brbeaird", lockTypeName, door, getHubID(), ["name": doorName])
+                        childDoor.updateMyQDoorId(myQData.myQDeviceId)
                         state.installMsg = state.installMsg + doorName + ": created lock device \r\n\r\n"
                     }
                     catch(physicalgraph.app.exception.UnknownDeviceTypeException e)
@@ -373,7 +398,8 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                 else if (sensor){
                     try{
                         log.debug "Creating door with sensor"
-                        addChildDevice("brbeaird", sensorTypeName, door, getHubID(), ["name": doorName])
+                        childDoor = addChildDevice("brbeaird", sensorTypeName, door, getHubID(), ["name": doorName])
+                        childDoor.updateMyQDoorId(myQData.myQDeviceId)
                         state.installMsg = state.installMsg + doorName + ": created door device (sensor version) \r\n\r\n"
                     }
                     catch(physicalgraph.app.exception.UnknownDeviceTypeException e)
@@ -386,7 +412,8 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                 else{
                     try{
                         log.debug "Creating door with no sensor"
-                        addChildDevice("brbeaird", noSensorTypeName, door, getHubID(), ["name": doorName])
+                        childDoor = addChildDevice("brbeaird", noSensorTypeName, door, getHubID(), ["name": doorName])
+                        childDoor.updateMyQDoorId(myQData.myQDeviceId)
                         state.installMsg = state.installMsg + doorName + ": created door device (no-sensor version) \r\n\r\n"
                     }
                     catch(physicalgraph.app.exception.UnknownDeviceTypeException e)
@@ -672,7 +699,7 @@ private getDoorList() {
                         log.debug "Storing door info: " + description + "type: " + device.MyQDeviceTypeId + " status: " + doorState +  " type: " + device.MyQDeviceTypeName
                         deviceList[dni] = description
                         state.doorList[dni] = description
-                        state.data[dni] = [ status: doorState, lastAction: updatedTime, name: description, type: device.MyQDeviceTypeId, sensor: '']
+                        state.data[dni] = [ status: doorState, lastAction: updatedTime, name: description, type: device.MyQDeviceTypeId, sensor: '', myQDeviceId: device.MyQDeviceId]
                     }
                     else{
                     	log.debug "Door " + device.MyQDeviceId + " has blank desc field. This is unusual..."
