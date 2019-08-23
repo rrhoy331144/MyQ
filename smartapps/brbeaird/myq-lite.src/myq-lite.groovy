@@ -20,6 +20,12 @@
  */
 include 'asynchttp_v1'
 
+String appVersion() { return "3.0.0" }
+String appModified() { return "2019-08-21"}
+String appAuthor() { return "Brian Beaird" }
+String gitBranch() { return "brbeaird" }
+String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_MyQ/master/icons/$imgName" }
+
 definition(
 	name: "MyQ Lite",
 	namespace: "brbeaird",
@@ -32,7 +38,9 @@ definition(
 )
 
 preferences {
-	page(name: "prefLogIn", title: "MyQ")
+	page(name: "mainPage", title: "MyQ Lite")
+    page(name: "prefLogIn", title: "MyQ")
+    page(name: "loginResultPage", title: "MyQ")
 	page(name: "prefListDevices", title: "MyQ")
     page(name: "sensorPage", title: "MyQ")    
     page(name: "noDoorsSelected", title: "MyQ")
@@ -40,29 +48,132 @@ preferences {
     page(name: "prefUninstall", title: "MyQ")
 }
 
+def appInfoSect(sect=true)	{
+	def str = ""
+	str += "${app?.name}"
+	str += "\nAuthor: ${appAuthor()}"	
+	section() { paragraph str, image: getAppImg("myq@2x.png") }
+}
+
+def mainPage() {	
+    
+    state.lastPage = "mainPage"
+    getVersionInfo(0, 0)
+    versionCheck2()
+    dynamicPage(name: "mainPage", nextPage: "", uninstall: false, install: true) {
+    	appInfoSect()
+        def devs = getConfiguredDevices()
+        section("MyQ Account"){
+            paragraph title: "", "Email: ${settings.username}\nGateway Brand: ${settings.brand}"
+            //href(name: "", page: "prefLogIn",params: [nexxxtPage: "mainPage"], description: "Tap to modify account")
+            href "prefLogIn", title: "", description: "Tap to modify account", params: [nextPageName: "mainPage"]
+        }
+        section("Connected Devices") {
+        	paragraph title: "", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
+            href "prefListDevices", title: "", description: "Tap to modify devices"
+        }
+        section("App and Handler Versions"){        	
+            state.currentVersion.each { device, version ->
+            	paragraph title: "", "${device} ${version} (${versionCompare(device)})"
+            }
+            input "prefUpdateNotify", "bool", required: false, title: "Notify when new version is available"
+        }
+        section("Uninstall") {
+            paragraph "Tap below to completely uninstall this SmartApp and devices (doors and lamp control devices will be force-removed from automations and SmartApps)"
+            href(name: "", title: "",  description: "Tap to Uninstall", required: false, page: "prefUninstall")
+        }
+    }
+}
+
+
+def versionCompare(deviceName){	
+    if (state.currentVersion[deviceName] == state.latestVersion[deviceName]){
+    	return 'latest'
+    }
+    else{
+   		return "${state.latestVersion[deviceName]} available"
+    }
+}
+
+
+def versionCheck2(){
+	state.currentVersion = [:]
+    state.currentVersion['SmartApp'] = appVersion()
+    
+	getChildDevices().each { childDevice ->
+        try {
+            def devType = childDevice.getTypeName()
+
+            if (devType != "Momentary Button Tile"){
+                if (devType == "MyQ Garage Door Opener"){
+                	state.currentVersion['DoorDevice'] = childDevice.showVersion()                	
+                }
+                if (devType == "MyQ Garage Door Opener-NoSensor"){
+                    state.currentVersion['DoorDeviceNoSensor'] = childDevice.showVersion()
+                }
+                if (devType == "MyQ Light Controller"){
+                	state.currentVersion['LightDevice'] = childDevice.showVersion()
+                }
+            }
+		} catch (MissingPropertyException e){
+			log.debug "API Error: $e"
+		}
+    }
+}
+
+
+def getConfiguredDevices(){
+	def devices = []
+    childDevices.each { child ->
+    	def myQId = child.getMyDeviceQId() ? "ID: ${child.getMyDeviceQId()}" : 'Missing MyQ ID'
+        def devName = child.name
+        if (child.typeName == "MyQ Garage Door Opener"){        	
+        	devName = devName + " (${child.currentContact})  ${myQId}"
+        }
+        else if (child.typeName == "MyQ Garage Door Opener-NoSensor"){
+        	devName = devName + " (No sensor)   ${myQId}"
+		}
+        else{
+        	devName = devName + " (${child.currentSwitch})  ${myQId}"
+        }        
+        devices.push(devName)
+    }
+    return devices
+}
+
+
 
 /* Preferences */
-def prefLogIn() {
-    state.previousVersion = state.thisSmartAppVersion
-    if (state.previousVersion == null){
-    	state.previousVersion = 0;
-    }
-    state.thisSmartAppVersion = "2.1.11"
+def prefLogIn(params) {    
     state.installMsg = ""
     def showUninstall = username != null && password != null
-	return dynamicPage(name: "prefLogIn", title: "Connect to MyQ", nextPage:"prefListDevices", uninstall:false, install: false, submitOnChange: true) {
+	return dynamicPage(name: "prefLogIn", title: "Connect to MyQ", nextPage:"loginResultPage", uninstall:false, install: false, submitOnChange: true) {
 		section("Login Credentials"){
 			input("username", "email", title: "Username", description: "MyQ Username (email address)")
 			input("password", "password", title: "Password", description: "MyQ password")
 		}
 		section("Gateway Brand"){
 			input(name: "brand", title: "Gateway Brand", type: "enum",  metadata:[values:["Liftmaster","Chamberlain","Craftsman"]] )
-		}
-        section("Uninstall") {
-            paragraph "Tap below to completely uninstall this SmartApp and devices (doors and lamp control devices will be force-removed from automations and SmartApps)"
-            href(name: "href", title: "Uninstall", required: false, page: "prefUninstall")
-        }
+		}        
 	}
+}
+
+def loginResultPage(){
+	log.debug "login result next page: ${state.lastPage}"
+    if (forceLogin()) {
+    	return dynamicPage(name: "loginResultPage", nextPage: state.lastPage,  title: "", install:false, uninstall:false) {
+			section(""){
+				paragraph "Login successful!"
+			}
+		}    
+    }
+    else{
+    	return dynamicPage(name: "loginResultPage", title: "Login Error", install:false, uninstall:false) {
+			section(""){
+				paragraph "The username or password you entered is incorrect. Go back and try again. "
+			}
+		}    
+    }
 }
 
 def prefUninstall() {
@@ -88,9 +199,10 @@ def prefUninstall() {
 }
 
 def prefListDevices() {
-    getVersionInfo(0, 0);
+    //getVersionInfo(0, 0);
+    state.lastPage = "prefListDevices"
     getSelectedDevices("lights")
-    if (forceLogin()) {
+    if (doLogin()) {
 		def doorList = getDoorList()
 		if ((state.doorList) || (state.lightList)){
         	def nextPage = "sensorPage"
@@ -122,14 +234,8 @@ def prefListDevices() {
 				}
 			}
 		}
-
-
 	} else {
-		return dynamicPage(name: "prefListDevices",  title: "Error!", install:false, uninstall:true) {
-			section(""){
-				paragraph "The username or password you entered is incorrect. Try again. "
-			}
-		}
+		return prefLogIn([nextPageName: "prefListDevices"])
 	}
 }
 
@@ -246,11 +352,12 @@ def initialize() {
     def selectedLights = getSelectedDevices("lights")
     selectedLights.each {
     	log.debug "Checking for existing light: " + it
-    	if (!getChildDevice(it)) {
+        def childLight = getChildDevice(it)
+    	if (!childLight) {
         	log.debug "Creating child light device: " + it
 
             try{
-            	addChildDevice("brbeaird", "MyQ Light Controller", it, getHubID(), ["name": lightsList[it]])
+            	childLight = addChildDevice("brbeaird", "MyQ Light Controller", it, getHubID(), ["name": lightsList[it]])
                 state.installMsg = state.installMsg + lightsList[it] + ": created light device. \r\n\r\n"
             }
             catch(physicalgraph.app.exception.UnknownDeviceTypeException e)
@@ -260,10 +367,11 @@ def initialize() {
             }
         }
         else{
-        	log.debug "Light device already exists: " + it
+        	log.debug "Light device already exists: " + it            
             state.installMsg = state.installMsg + lightsList[it] + ": light device already exists. \r\n\r\n"
-        }
-
+        }        
+        childLight.updateDeviceStatus(1)
+        //childLight.updateDeviceStatus(state.data[it].status)
     }
 
     // Remove unselected devices
@@ -274,8 +382,7 @@ def initialize() {
         DNI = DNI.replace(" Opener", "")
         DNI = DNI.replace(" Closer", "")
 
-        if (!(DNI in selectedDevices)){
-            log.debug "found device to delete: " + it
+        if (!(DNI in selectedDevices)){            
             try{
                 	deleteChildDevice(it.deviceNetworkId, true)
             } catch (e){
@@ -287,8 +394,7 @@ def initialize() {
     }
 
     //Set initial values
-    if (state.validatedDoors){
-    	log.debug "Doing the sync"
+    if (state.validatedDoors){    	
     	syncDoorsWithSensors()
     }    
     
@@ -298,6 +404,10 @@ def initialize() {
         	subscribe(val, "contact", sensorHandler)
         }
     }
+}
+
+private validateDoorMyQId(door, doorName, childDevice){
+	
 }
 
 def createChilDevices(door, sensor, doorName, prefPushButtons){
@@ -310,33 +420,32 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
         //Has door's child device already been created?
         def existingDev = getChildDevice(door)
         def existingType = existingDev?.typeName
-        
-        
 
         if (existingDev){
         	log.debug "Child already exists for " + doorName + ". Sensor name is: " + sensor
-            state.installMsg = state.installMsg + doorName + ": door device already exists. \r\n\r\n"
+            state.installMsg = state.installMsg + doorName + ": door device already exists. \r\n\r\n"            
             
-            //Verify door's MyQ device ID
             def myQDeviceId = existingDev?.latestValue("myQDoorId")
-            log.debug "existing door MyQDeviceId: ${myQDeviceId}"
+
+            //If no ID assigned, simply use the door DNI as the initial value
             if (!myQDeviceId){
                 log.debug "setting door's deviceID to ${door}"
-                existingDev.updateMyQDoorId(door)
+                childDevice.updateMyQDoorId(door)
             }
 
-            //Door's MyQ ID is no longer valid. Try and resolve using door name
-            else{                
-                if (!state.data[door]){
-                log.debug "Warning: door's MyQ ID is no longer valid! Trying to resolve..."
-                    state.data.each { myQData ->
-                        if (myQData.name == doorName){
-                            log.debug "Successful ID search: setting door's deviceID to ${state.data[door].myQDeviceId}"
-                            existingDev.updateMyQDoorId(myQData.myQDeviceId)                    
-                        }                    
+            //Now check the latest MyQ response to see if that ID is still valid. If it isn't, try to look up the new one by door name
+            def doorDNI = [app.id, "GarageDoorOpener", myQDeviceId].join('|')
+            if (!state.data[doorDNI]){
+                log.debug "Warning: door's MyQ ID ${myQDeviceId} is no longer valid! Trying to resolve..."
+                state.data.each { key, value ->
+                	log.debug "Checking for match with ${key}"
+                    log.debug "Checking for match with ${value.name}"
+                    if (value.name == doorName){
+                        log.debug "Successful ID search: setting door's deviceID to ${value.myQDeviceId}"
+                        existingDev.updateMyQDoorId(value.myQDeviceId)
                     }
                 }
-            }
+            }            
 
             if (prefUseLockType && existingType != lockTypeName){
                 try{
@@ -467,8 +576,7 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 
         //Cleanup defunct push button devices if no longer wanted
         else{
-        	def pushButtonIDs = [door + " Opener", door + " Closer"]
-            log.debug "ID's to look for: " + pushButtonIDs
+        	def pushButtonIDs = [door + " Opener", door + " Closer"]            
             def devsToDelete = getChildDevices().findAll { pushButtonIDs.contains(it.deviceNetworkId)}
             log.debug "button devices to delete: " + devsToDelete
 			devsToDelete.each{
@@ -639,7 +747,8 @@ private doLogin() {
 
 // Listing all the garage doors you have in MyQ
 private getDoorList() {
-	state.doorList = [:]
+	state.data = [:]
+    state.doorList = [:]
     state.lightList = [:]
 
     def deviceList = [:]
@@ -886,6 +995,7 @@ private apiPut(apiPath, apiBody = [], callback = {}) {
     ]
 
     try {
+        log.debug "put body ${apiBody}"
         httpPut([ uri: getApiURL(), path: apiPath, headers: myHeaders, body: apiBody ]) { response ->
             log.debug "Got PUT response: Retry: ${atomicState.retryCount} of ${MAX_RETRIES}\nSTATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
             if (response.status == 200) {
@@ -929,6 +1039,7 @@ private apiPostLogin(apiPath, apiBody = [], callback = {}) {
     ]
 
     try {
+        //log.debug "login body: ${apiBody}"
         return httpPost([ uri: getApiURL(), path: apiPath, headers: myHeaders, body: apiBody ]) { response ->
             //log.debug "Got LOGIN POST response: STATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
             if (response.status == 200) {
@@ -973,39 +1084,16 @@ def sendCommand(child, attributeName, attributeValue) {
 	state.lastCommandSent = now()
     if (login()) {
 		//Send command
-		apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: getChildDeviceID(child), AttributeName: attributeName, AttributeValue: attributeValue ])
+		//apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: getChildDeviceID(child), AttributeName: attributeName, AttributeValue: attributeValue ])
+        apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: child.getMyQId(), AttributeName: attributeName, AttributeValue: attributeValue ])        
 
+        /*
         if ((attributeName == "desireddoorstate") && (attributeValue == 0)) {		// if we are closing, check if we have an Acceleration sensor, if so, "waiting" until it moves
             def firstDoor = state.validatedDoors[0]
     		if (doors instanceof String) firstDoor = doors
         	def doorDNI = child.device.deviceNetworkId
-        	switch (doorDNI) {
-        		case firstDoor:
-                	if (door1Sensor){if (door1Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-                	break
-            	case state.validatedDoors[1]:
-            		if (door2Sensor){if (door2Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-                	break
-            	case state.validatedDoors[2]:
-            		if (door3Sensor){if (door3Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-                	break
-            	case state.validatedDoors[3]:
-            		if (door4Sensor){if (door4Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-        			break
-                case state.validatedDoors[4]:
-            		if (door5Sensor){if (door5Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-        			break
-                case state.validatedDoors[5]:
-            		if (door6Sensor){if (door6Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-        			break
-                case state.validatedDoors[6]:
-            		if (door7Sensor){if (door7Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-        			break
-                case state.validatedDoors[7]:
-            		if (door8Sensor){if (door8Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}
-        			break
-            }
-        }
+        	//if (door1Sensor){if (door1Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}*/
+        //}
 		return true
 	}
 }
@@ -1014,7 +1102,7 @@ def sendCommand(child, attributeName, attributeValue) {
 
 def getVersionInfo(oldVersion, newVersion){
     def params = [
-        uri:  'http://www.fantasyaftermath.com/getMyQVersion/' + oldVersion + '/' + newVersion,
+        uri:  'https://brbeaird.herokuapp.com/getVersion/myq/' + oldVersion + '/' + newVersion,
         contentType: 'application/json'
     ]
     asynchttp_v1.get('responseHandlerMethod', params)
@@ -1025,6 +1113,7 @@ def responseHandlerMethod(response, data) {
         log.error "response has error: $response.errorMessage"
     } else {
         def results = response.json
+        state.latestVersion = response.json
         state.latestSmartAppVersion = results.SmartApp;
         state.latestDoorVersion = results.DoorDevice;
         state.latestDoorNoSensorVersion = results.DoorDeviceNoSensor;

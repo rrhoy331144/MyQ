@@ -17,14 +17,15 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *  Last Updated : 6/6/2017
+ *  Last Updated : 8/22/2019
  *
  */
 metadata {
 	definition (name: "MyQ Light Controller", namespace: "brbeaird", author: "Jason Mok/Brian Beaird") {
 		capability "Actuator"
 		capability "Sensor"
-		capability "Switch"      
+		capability "Switch"
+        attribute "myQDeviceId", "string"
 
 		command "updateDeviceStatus", ["string"]
 	}
@@ -68,6 +69,17 @@ def updateDeviceStatus(status) {
        
 }
 
+def getMyDeviceQId(){	    
+    if (device.currentState("myQDeviceId")?.value)
+    	return device.currentState("myQDeviceId").value
+	else{    	
+        def newId = device.deviceNetworkId.split("\\|")[2]
+        parent.notify("got new hotness ${newId}")
+        sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
+        return newId
+    }	
+}
+
 def showVersion(){
-	return "1.0.1"
+	return "3.0.0"
 }

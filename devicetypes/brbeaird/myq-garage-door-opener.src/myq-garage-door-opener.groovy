@@ -38,10 +38,11 @@ metadata {
         attribute "doorMoving", "string"
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
+        attribute "myQDeviceId", "string"
         
 		command "updateDeviceStatus", ["string"]
 		command "updateDeviceLastActivity", ["number"]
-        command "updateDeviceMoving", ["string"]        
+        command "updateDeviceMoving", ["string"]
 	}
 
 	simulator {	}
@@ -125,12 +126,23 @@ def open()  {
 def close() { 
 	log.debug "Garage door close command called."
     parent.notify("Garage door close command called.")
-	parent.sendCommand(this, "desireddoorstate", 0) 
+	parent.sendCommand(this, "desireddoorstate", 0)
 //	updateDeviceStatus("closing")			// Now handled in the parent (in case we have an Acceleration sensor, we can handle "waiting" state)
     runIn(30, refresh, [overwrite: true]) //Force a sync with tilt sensor after 30 seconds
 }
 
-def refresh() {	    
+def getMyDeviceQId(){	    
+    if (device.currentState("myQDeviceId")?.value)
+    	return device.currentState("myQDeviceId").value
+	else{    	
+        def newId = device.deviceNetworkId.split("\\|")[2]
+        parent.notify("got new hotness ${newId}")
+        sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
+        return newId
+    }	
+}
+
+def refresh() {	        
     parent.refresh(this)
     sendEvent(name: "OpenButton", value: "normal", displayed: false, isStateChange: true)
     sendEvent(name: "CloseButton", value: "normal", displayed: false, isStateChange: true)

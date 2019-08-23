@@ -28,6 +28,7 @@ metadata {
         
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
+        attribute "myQDeviceId", "string"
         
         command "open"
         command "close"
@@ -84,6 +85,17 @@ def resetToUnknown(){
 	sendEvent(name: "door", value: "unknown", isStateChange: true, display: false, displayed: false)
     sendEvent(name: "OpenButton", value: "normal", displayed: false, isStateChange: true)
     sendEvent(name: "CloseButton", value: "normal", displayed: false, isStateChange: true)
+}
+
+def getMyDeviceQId(){	    
+    if (device.currentState("myQDeviceId")?.value)
+    	return device.currentState("myQDeviceId").value
+	else{    	
+        def newId = device.deviceNetworkId.split("\\|")[2]
+        parent.notify("got new hotness ${newId}")
+        sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
+        return newId
+    }	
 }
 
 def log(msg){
