@@ -41,7 +41,7 @@ preferences {
     page(name: "prefLogIn", title: "MyQ")
     page(name: "loginResultPage", title: "MyQ")
 	page(name: "prefListDevices", title: "MyQ")
-    page(name: "sensorPage", title: "MyQ")    
+    page(name: "sensorPage", title: "MyQ")
     page(name: "noDoorsSelected", title: "MyQ")
     page(name: "summary", title: "MyQ")
     page(name: "prefUninstall", title: "MyQ")
@@ -50,16 +50,16 @@ preferences {
 def appInfoSect(sect=true)	{
 	def str = ""
 	str += "${app?.name}"
-	str += "\nAuthor: ${appAuthor()}"	
+	str += "\nAuthor: ${appAuthor()}"
 	section() { paragraph str, image: getAppImg("myq@2x.png") }
 }
 
-def checkForUpdates(){	
-    getVersionInfo('versionCheck', 0, true)    
+def checkForUpdates(){
+    getVersionInfo('versionCheck', 0, true)
 }
 
-def mainPage() {	
-    
+def mainPage() {
+
     state.lastPage = "mainPage"
     getVersionInfo(0, 0)
     dynamicPage(name: "mainPage", nextPage: "", uninstall: false, install: true) {
@@ -67,14 +67,13 @@ def mainPage() {
         def devs = refreshChildren()
         section("MyQ Account"){
             paragraph title: "", "Email: ${settings.username}\nGateway Brand: ${settings.brand}"
-            //href(name: "", page: "prefLogIn",params: [nexxxtPage: "mainPage"], description: "Tap to modify account")
             href "prefLogIn", title: "", description: "Tap to modify account", params: [nextPageName: "mainPage"]
         }
         section("Connected Devices") {
         	paragraph title: "", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
             href "prefListDevices", title: "", description: "Tap to modify devices"
         }
-        section("App and Handler Versions"){        	
+        section("App and Handler Versions"){
             state.currentVersion.each { device, version ->
             	paragraph title: "", "${device} ${version} (${versionCompare(device)})"
             }
@@ -87,7 +86,7 @@ def mainPage() {
     }
 }
 
-def versionCompare(deviceName){	
+def versionCompare(deviceName){
     if (state.currentVersion[deviceName] == state.latestVersion[deviceName]){
     	return 'latest'
     }
@@ -103,25 +102,25 @@ def updateVersionMessage(){
         	state.versionMsg = "MyQ Lite Updates are available."
     	}
     }
-    
+
     //Notify if updates are available
-    if (state.versionMsg != ""){        
+    if (state.versionMsg != ""){
         sendNotificationEvent(state.versionMsg)
-        
+
         //Send push notification if enabled
         if (prefUpdateNotify){
-        	
+
             //Don't notify if we've sent a notification within the last 1 day
             if (state.lastVersionNotification){
             	def timeSinceLastNotification = (now() - state.lastVersionNotification) / 1000
                 if (timeSinceLastNotification < 60*60*24){
                 	return
                 }
-            }            
+            }
             sendPush(state.versionMsg)
             state.lastVersionNotification = now()
     	}
-    }    
+    }
 }
 
 def refreshChildren(){
@@ -131,9 +130,9 @@ def refreshChildren(){
     childDevices.each { child ->
     	def myQId = child.getMyDeviceQId() ? "ID: ${child.getMyDeviceQId()}" : 'Missing MyQ ID'
         def devName = child.name
-        if (child.typeName == "MyQ Garage Door Opener"){        	
+        if (child.typeName == "MyQ Garage Door Opener"){
         	devName = devName + " (${child.currentContact})  ${myQId}"
-            state.currentVersion['DoorDevice'] = child.showVersion()   
+            state.currentVersion['DoorDevice'] = child.showVersion()
         }
         else if (child.typeName == "MyQ Garage Door Opener-NoSensor"){
         	devName = devName + " (No sensor)   ${myQId}"
@@ -142,7 +141,7 @@ def refreshChildren(){
         else{
         	devName = devName + " (${child.currentSwitch})  ${myQId}"
             state.currentVersion['LightDevice'] = child.showVersion()
-        }        
+        }
         devices.push(devName)
     }
     return devices
@@ -151,7 +150,7 @@ def refreshChildren(){
 
 
 /* Preferences */
-def prefLogIn(params) {    
+def prefLogIn(params) {
     state.installMsg = ""
     def showUninstall = username != null && password != null
 	return dynamicPage(name: "prefLogIn", title: "Connect to MyQ", nextPage:"loginResultPage", uninstall:false, install: false, submitOnChange: true) {
@@ -161,7 +160,7 @@ def prefLogIn(params) {
 		}
 		section("Gateway Brand"){
 			input(name: "brand", title: "Gateway Brand", type: "enum",  metadata:[values:["Liftmaster","Chamberlain","Craftsman"]] )
-		}        
+		}
 	}
 }
 
@@ -172,14 +171,14 @@ def loginResultPage(){
 			section(""){
 				paragraph "Login successful!"
 			}
-		}    
+		}
     }
     else{
     	return dynamicPage(name: "loginResultPage", title: "Login Error", install:false, uninstall:false) {
 			section(""){
 				paragraph "The username or password you entered is incorrect. Go back and try again. "
 			}
-		}    
+		}
     }
 }
 
@@ -265,7 +264,7 @@ def sensorPage() {
 
     log.debug "Valid doors chosen: " + state.validatedDoors
 
-    return dynamicPage(name: "sensorPage",  title: "Optional Sensors and Push Buttons", nextPage:"summary", install:false, uninstall:true) {                
+    return dynamicPage(name: "sensorPage",  title: "Optional Sensors and Push Buttons", nextPage:"summary", install:false, uninstall:true) {
         section("Sensor setup"){
         	paragraph "For each door below, you can specify an optional sensor that allows the device type to know whether the door is open or closed. This helps the device function as a switch " +
             	"you can turn on (to open) and off (to close) in other automations and SmartApps."
@@ -273,14 +272,14 @@ def sensorPage() {
             "garage from SmartTiles and other interfaces like Google Home that can't function with the built-in open/close capability. See wiki for more details"
         }
         def sensorCounter = 1
-        state.validatedDoors.each{ door ->                
+        state.validatedDoors.each{ door ->
             section("Setup options for " + state.data[door].name){
                 input "door${sensorCounter}Sensor",  "capability.contactSensor", required: false, multiple: false, title: state.data[door].name + " Contact Sensor"
                 input "prefDoor${sensorCounter}PushButtons", "bool", required: false, title: "Create on/off push buttons?"
             }
             sensorCounter++
         }
-          
+
     }
 }
 
@@ -298,7 +297,7 @@ def summary() {
 def installed() {
 	if (door1Sensor && state.validatedDoors){
     	refreshAll()
-        unschedule()    	
+        unschedule()
     }
 }
 
@@ -306,12 +305,12 @@ def updated() {
 	log.debug "Updated..."
     unschedule()
     runEvery3Hours(updateVersionInfo)
-    
+
     if (state.previousVersion != state.thisSmartAppVersion){
     	getVersionInfo(state.previousVersion, state.thisSmartAppVersion);
     }
     if (door1Sensor && state.validatedDoors){
-    	refreshAll()        
+    	refreshAll()
     	runEvery30Minutes(refreshAll)
     }
 }
@@ -341,17 +340,17 @@ def uninstalled() {
 
 def initialize() {
 	unsubscribe()
-    log.debug "Initializing..."    
-    
+    log.debug "Initializing..."
+
     //Mark sensors onto state door data
     def doorSensorCounter = 1
-    state.validatedDoors.each{ door ->    	
-        if (settings["door${doorSensorCounter}Sensor"]){        	
+    state.validatedDoors.each{ door ->
+        if (settings["door${doorSensorCounter}Sensor"]){
             state.data[door].sensor = "door${doorSensorCounter}Sensor"
             doorSensorCounter++
         }
     }
-    
+
     //Create door devices
     def doorCounter = 1
     state.validatedDoors.each{ door ->
@@ -380,9 +379,9 @@ def initialize() {
             }
         }
         else{
-        	log.debug "Light device already exists: " + it            
+        	log.debug "Light device already exists: " + it
             state.installMsg = state.installMsg + lightsList[it] + ": light device already exists. \r\n\r\n"
-        }        
+        }
         childLight.updateDeviceStatus(1)
         //childLight.updateDeviceStatus(state.data[it].status)
     }
@@ -395,7 +394,7 @@ def initialize() {
         DNI = DNI.replace(" Opener", "")
         DNI = DNI.replace(" Closer", "")
 
-        if (!(DNI in selectedDevices)){            
+        if (!(DNI in selectedDevices)){
             try{
                 	deleteChildDevice(it.deviceNetworkId, true)
             } catch (e){
@@ -407,12 +406,12 @@ def initialize() {
     }
 
     //Set initial values
-    if (state.validatedDoors){    	
+    if (state.validatedDoors){
     	syncDoorsWithSensors()
-    }    
-    
+    }
+
     //Subscribe to sensor events
-    settings.each{ key, val->    	                
+    settings.each{ key, val->
         if (key.contains('Sensor')){
         	subscribe(val, "contact", sensorHandler)
         }
@@ -420,7 +419,7 @@ def initialize() {
 }
 
 private validateDoorMyQId(door, doorName, childDevice){
-	
+
 }
 
 def createChilDevices(door, sensor, doorName, prefPushButtons){
@@ -436,8 +435,8 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 
         if (existingDev){
         	log.debug "Child already exists for " + doorName + ". Sensor name is: " + sensor
-            state.installMsg = state.installMsg + doorName + ": door device already exists. \r\n\r\n"            
-            
+            state.installMsg = state.installMsg + doorName + ": door device already exists. \r\n\r\n"
+
             def myQDeviceId = existingDev?.latestValue("myQDoorId")
 
             //If no ID assigned, simply use the door DNI as the initial value
@@ -458,7 +457,7 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                         existingDev.updateMyQDoorId(value.myQDeviceId)
                     }
                 }
-            }            
+            }
 
             if (prefUseLockType && existingType != lockTypeName){
                 try{
@@ -589,7 +588,7 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 
         //Cleanup defunct push button devices if no longer wanted
         else{
-        	def pushButtonIDs = [door + " Opener", door + " Closer"]            
+        	def pushButtonIDs = [door + " Opener", door + " Closer"]
             def devsToDelete = getChildDevices().findAll { pushButtonIDs.contains(it.deviceNetworkId)}
             log.debug "button devices to delete: " + devsToDelete
 			devsToDelete.each{
@@ -610,18 +609,18 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 
 
 def syncDoorsWithSensors(child){
-    
+
     // refresh only the requesting door (makes things a bit more efficient if you have more than 1 door
-    if (child) { 
+    if (child) {
     	def doorDNI = child.device.deviceNetworkId
-        log.debug "got DNI for ${child}: ${doorDNI}"        
+        log.debug "got DNI for ${child}: ${doorDNI}"
         updateDoorStatus(doorDNI, settings[state.data[doorDNI].sensor], '', '', child)
     }
-    
+
     //Otherwise, refresh everything
     else{
-        state.validatedDoors.each { door ->        	
-        	updateDoorStatus(door, settings[state.data[door].sensor], '', '', '')            
+        state.validatedDoors.each { door ->
+        	updateDoorStatus(door, settings[state.data[door].sensor], '', '', '')
         }
     }
 }
@@ -643,7 +642,7 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
         def value = "unknown"
         def moving = "unknown"
         def door = doorToUpdate.latestValue("door")
-        
+
         value = sensor.latestValue("contact")
 
         doorToUpdate.updateDeviceStatus(value)
@@ -654,7 +653,7 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
         //Write to child log if this was initiated from one of the doors
         if (child)
             child.log("Door: " + doorName + ": Updating with status - " + value + " -  from sensor " + sensor)
-        
+
 
         //Get latest activity timestamp for the sensor (data saved for up to a week)
         def eventsSinceYesterday = sensor.eventsSince(new Date() - 7)
@@ -693,9 +692,9 @@ def refreshAll(evt){
 }
 
 def sensorHandler(evt) {
-    log.debug "Sensor change detected: Event name  " + evt.name + " value: " + evt.value   + " deviceID: " + evt.deviceId    
-    
-    state.validatedDoors.each{ door -> 
+    log.debug "Sensor change detected: Event name  " + evt.name + " value: " + evt.value   + " deviceID: " + evt.deviceId
+
+    state.validatedDoors.each{ door ->
     	if (settings[state.data[door].sensor].id == evt.deviceId)
             log.debug "Updating door status ${door} , ${settings[state.data[door].sensor]}"
             updateDoorStatus(door, settings[state.data[door].sensor], '', '', null)
@@ -1067,13 +1066,13 @@ private apiPostLogin(apiPath, apiBody = [], callback = {}) {
             } else {
                 log.error "Unknown LOGIN POST status: ${response.status}"
             }
-            
+
             return false
         }
     } catch (e)	{
         log.warn "API POST Error: $e"
     }
-    
+
     return false
 }
 
@@ -1098,7 +1097,7 @@ def sendCommand(child, attributeName, attributeValue) {
     if (login()) {
 		//Send command
 		//apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: getChildDeviceID(child), AttributeName: attributeName, AttributeValue: attributeValue ])
-        apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: child.getMyQId(), AttributeName: attributeName, AttributeValue: attributeValue ])        
+        apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: child.getMyQId(), AttributeName: attributeName, AttributeValue: attributeValue ])
 
         /*
         if ((attributeName == "desireddoorstate") && (attributeValue == 0)) {		// if we are closing, check if we have an Acceleration sensor, if so, "waiting" until it moves
@@ -1116,7 +1115,7 @@ def getVersionInfo(oldVersion, newVersion){
         uri:  'https://brbeaird.com/getVersion/myq-beta/' + oldVersion + '/' + newVersion,
         contentType: 'application/json'
     ]
-    def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'responseHandlerMethod'    
+    def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'responseHandlerMethod'
     asynchttp_v1.get(callbackMethod, params)
 }
 
