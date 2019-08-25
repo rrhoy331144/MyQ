@@ -5,7 +5,7 @@
  *
  *  MyQ Lite
  *
- *  Copyright 2018 Jason Mok/Brian Beaird/Barry Burke/RBoy Apps
+ *  Copyright 2019 Jason Mok/Brian Beaird/Barry Burke/RBoy Apps
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -16,12 +16,11 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *  Last Updated : 2019-04-30
  */
 include 'asynchttp_v1'
 
 String appVersion() { return "3.0.0" }
-String appModified() { return "2019-08-21"}
+String appModified() { return "2019-08-25"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_MyQ/master/icons/$imgName" }
@@ -55,14 +54,17 @@ def appInfoSect(sect=true)	{
 	section() { paragraph str, image: getAppImg("myq@2x.png") }
 }
 
+def checkForUpdates(){	
+    getVersionInfo('versionCheck', 0, true)    
+}
+
 def mainPage() {	
     
     state.lastPage = "mainPage"
     getVersionInfo(0, 0)
-    versionCheck2()
     dynamicPage(name: "mainPage", nextPage: "", uninstall: false, install: true) {
     	appInfoSect()
-        def devs = getConfiguredDevices()
+        def devs = refreshChildren()
         section("MyQ Account"){
             paragraph title: "", "Email: ${settings.username}\nGateway Brand: ${settings.brand}"
             //href(name: "", page: "prefLogIn",params: [nexxxtPage: "mainPage"], description: "Tap to modify account")
@@ -85,7 +87,6 @@ def mainPage() {
     }
 }
 
-
 def versionCompare(deviceName){	
     if (state.currentVersion[deviceName] == state.latestVersion[deviceName]){
     	return 'latest'
@@ -95,46 +96,52 @@ def versionCompare(deviceName){
     }
 }
 
-
-def versionCheck2(){
-	state.currentVersion = [:]
-    state.currentVersion['SmartApp'] = appVersion()
-    
-	getChildDevices().each { childDevice ->
-        try {
-            def devType = childDevice.getTypeName()
-
-            if (devType != "Momentary Button Tile"){
-                if (devType == "MyQ Garage Door Opener"){
-                	state.currentVersion['DoorDevice'] = childDevice.showVersion()                	
-                }
-                if (devType == "MyQ Garage Door Opener-NoSensor"){
-                    state.currentVersion['DoorDeviceNoSensor'] = childDevice.showVersion()
-                }
-                if (devType == "MyQ Light Controller"){
-                	state.currentVersion['LightDevice'] = childDevice.showVersion()
-                }
-            }
-		} catch (MissingPropertyException e){
-			log.debug "API Error: $e"
-		}
+def updateVersionMessage(){
+	state.versionMsg = ""
+    state.currentVersion.each { device, version ->
+    	if (versionCompare(device) != 'latest'){
+        	state.versionMsg = "MyQ Lite Updates are available."
+    	}
     }
+    
+    //Notify if updates are available
+    if (state.versionMsg != ""){        
+        sendNotificationEvent(state.versionMsg)
+        
+        //Send push notification if enabled
+        if (prefUpdateNotify){
+        	
+            //Don't notify if we've sent a notification within the last 1 day
+            if (state.lastVersionNotification){
+            	def timeSinceLastNotification = (now() - state.lastVersionNotification) / 1000
+                if (timeSinceLastNotification < 60*60*24){
+                	return
+                }
+            }            
+            sendPush(state.versionMsg)
+            state.lastVersionNotification = now()
+    	}
+    }    
 }
 
-
-def getConfiguredDevices(){
-	def devices = []
+def refreshChildren(){
+	state.currentVersion = [:]
+    state.currentVersion['SmartApp'] = appVersion()
+    def devices = []
     childDevices.each { child ->
     	def myQId = child.getMyDeviceQId() ? "ID: ${child.getMyDeviceQId()}" : 'Missing MyQ ID'
         def devName = child.name
         if (child.typeName == "MyQ Garage Door Opener"){        	
         	devName = devName + " (${child.currentContact})  ${myQId}"
+            state.currentVersion['DoorDevice'] = child.showVersion()   
         }
         else if (child.typeName == "MyQ Garage Door Opener-NoSensor"){
         	devName = devName + " (No sensor)   ${myQId}"
+            state.currentVersion['DoorDeviceNoSensor'] = child.showVersion()
 		}
         else{
         	devName = devName + " (${child.currentSwitch})  ${myQId}"
+            state.currentVersion['LightDevice'] = child.showVersion()
         }        
         devices.push(devName)
     }
@@ -280,11 +287,9 @@ def sensorPage() {
 def summary() {
 	state.installMsg = ""
     initialize()
-    versionCheck()
     return dynamicPage(name: "summary",  title: "Summary", install:true, uninstall:true) {
         section("Installation Details:"){
 			paragraph state.installMsg
-            paragraph state.versionWarning
 		}
     }
 }
@@ -299,15 +304,23 @@ def installed() {
 
 def updated() {
 	log.debug "Updated..."
+    unschedule()
+    runEvery3Hours(updateVersionInfo)
+    
     if (state.previousVersion != state.thisSmartAppVersion){
     	getVersionInfo(state.previousVersion, state.thisSmartAppVersion);
     }
     if (door1Sensor && state.validatedDoors){
-    	refreshAll()
-        unschedule()
+    	refreshAll()        
     	runEvery30Minutes(refreshAll)
     }
 }
+
+def updateVersionInfo(){
+	getVersionInfo('versionCheck', '0')
+}
+
+
 
 def uninstall(){
     log.debug "Removing MyQ Devices..."
@@ -1098,14 +1111,19 @@ def sendCommand(child, attributeName, attributeValue) {
 	}
 }
 
-
-
 def getVersionInfo(oldVersion, newVersion){
     def params = [
-        uri:  'https://brbeaird.herokuapp.com/getVersion/myq/' + oldVersion + '/' + newVersion,
+        uri:  'https://brbeaird.com/getVersion/myq-beta/' + oldVersion + '/' + newVersion,
         contentType: 'application/json'
     ]
-    asynchttp_v1.get('responseHandlerMethod', params)
+    def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'responseHandlerMethod'    
+    asynchttp_v1.get(callbackMethod, params)
+}
+
+def updateCheck(response, data) {
+	responseHandlerMethod(response,data)
+    refreshChildren()
+    updateVersionMessage()
 }
 
 def responseHandlerMethod(response, data) {
@@ -1119,70 +1137,7 @@ def responseHandlerMethod(response, data) {
         state.latestDoorNoSensorVersion = results.DoorDeviceNoSensor;
         state.latestLightVersion = results.LightDevice;
     }
-
-    /*log.debug "previousVersion: " + state.previousVersion
-    log.debug "installedVersion: " + state.thisSmartAppVersion
-    log.debug "latestVersion: " + state.latestSmartAppVersion
-    log.debug "doorVersion: " + state.latestDoorVersion
-    log.debug "doorNoSensorVersion: " + state.latestDoorNoSensorVersion
-    log.debug "lightVersion: " + state.latestLightVersion*/
 }
-
-def versionCheck(){
-	state.versionWarning = ""
-    state.thisDoorVersion = ""
-	state.thisDoorNoSensorVersion = ""
-    state.thisLightVersion = ""
-    state.versionWarning = ""
-
-    def usesDoorDev = false
-    def usesDoorNoSensorDev = false
-    def usesLightControllerDev = false
-
-    getChildDevices().each { childDevice ->
-
-        try {
-            def devType = childDevice.getTypeName()
-
-            if (devType != "Momentary Button Tile"){
-                if (devType == "MyQ Garage Door Opener"){
-                	usesDoorDev = true
-                    state.thisDoorVersion = childDevice.showVersion()
-                }
-                if (devType == "MyQ Garage Door Opener-NoSensor"){
-                	usesDoorNoSensorDev = true
-                    state.thisDoorNoSensorVersion = childDevice.showVersion()
-                }
-                if (devType == "MyQ Light Controller"){
-                	usesLightControllerDev = true
-                    state.thisLightVersion = childDevice.showVersion()
-                }
-            }
-
-		} catch (MissingPropertyException e)	{
-			log.debug "API Error: $e"
-		}
-    }
-
-    //log.debug "This door (no sensor) version: " + state.thisDoorNoSensorVersion
-    //log.debug "This door version: " + state.thisDoorVersion
-    //log.debug "This light version: " + state.thisLightVersion
-
-    if (state.thisSmartAppVersion != state.latestSmartAppVersion) {
-    	state.versionWarning = state.versionWarning + "Your SmartApp version (" + state.thisSmartAppVersion + ") is not the latest version (" + state.latestSmartAppVersion + ")\n\n"
-	}
-	if (usesDoorDev && state.thisDoorVersion != state.latestDoorVersion) {
-    	state.versionWarning = state.versionWarning + "Your MyQ Door device version (" + state.thisDoorVersion + ") is not the latest version (" + state.latestDoorVersion + ")\n\n"
-    }
-	if (usesDoorNoSensorDev && state.thisDoorNoSensorVersion != state.latestDoorNoSensorVersion) {
-    	state.versionWarning = state.versionWarning + "Your MyQ Door (No-sensor) device version (" + state.thisDoorNoSensorVersion + ") is not the latest version (" + state.latestDoorNoSensorVersion + ")\n\n"
-    }
-    if (usesLightControllerDev && state.thisLightVersion != state.latestLightVersion) {
-    	state.versionWarning = state.versionWarning + "Your MyQ Light Controller device version (" + state.thisLightVersion + ") is not the latest version (" + state.latestLightVersion + ")\n\n"
-    }
-    log.debug state.versionWarning
-}
-
 
 def notify(message){
 	sendNotificationEvent(message)
