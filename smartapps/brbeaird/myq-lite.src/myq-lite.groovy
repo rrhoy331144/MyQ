@@ -113,7 +113,7 @@ def updateVersionMessage(){
             //Don't notify if we've sent a notification within the last 1 day
             if (state.lastVersionNotification){
             	def timeSinceLastNotification = (now() - state.lastVersionNotification) / 1000
-                if (timeSinceLastNotification < 60*60*24){
+                if (timeSinceLastNotification < 60*60*23){
                 	return
                 }
             }
@@ -313,6 +313,7 @@ def updated() {
     	refreshAll()
     	runEvery30Minutes(refreshAll)
     }
+    stateCleanup()
 }
 
 def updateVersionInfo(){
@@ -732,7 +733,6 @@ def getSelectedDevices( settingsName ) {
 private forceLogin() {
 	//Reset token and expiry
 	state.session = [ brandID: 0, brandName: settings.brand, securityToken: null, expiration: 0 ]
-	state.polling = [ last: 0, rescheduler: now() ]
 	state.data = [:]
 	return doLogin()
 }
@@ -1136,6 +1136,20 @@ def responseHandlerMethod(response, data) {
         state.latestDoorNoSensorVersion = results.DoorDeviceNoSensor;
         state.latestLightVersion = results.LightDevice;
     }
+}
+
+//Remove old unused pieces of state
+def stateCleanup(){
+    if (state.latestDoorNoSensorVersion){state.remove('latestDoorNoSensorVersion')}
+    if (state.latestDoorVersion){state.remove('latestDoorVersion')}
+    if (state.latestLightVersion){state.remove('latestLightVersion')}
+    if (state.latestSmartAppVersion){state.remove('latestSmartAppVersion')}
+    if (state.thisDoorNoSensorVersion){state.remove('thisDoorNoSensorVersion')}
+    if (state.thisDoorVersion){state.remove('thisDoorVersion')}
+    if (state.thisLightVersion){state.remove('thisLightVersion')}
+    if (state.thisSmartAppVersion){state.remove('thisSmartAppVersion')}
+    if (state.versionWarning){state.remove('versionWarning')}
+    if (state.polling){state.remove('polling')}
 }
 
 def notify(message){
