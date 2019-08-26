@@ -20,7 +20,7 @@
 include 'asynchttp_v1'
 
 String appVersion() { return "3.0.0" }
-String appModified() { return "2019-08-25"}
+String appModified() { return "2019-08-26"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_MyQ/master/icons/$imgName" }
@@ -204,7 +204,7 @@ def prefListDevices() {
     state.lastPage = "prefListDevices"
     getSelectedDevices("lights")
     if (doLogin()) {
-		def doorList = getDoorList()
+		def doorList = getMyQDevices()
 		if ((state.doorList) || (state.lightList)){
         	def nextPage = "sensorPage"
             if (!state.doorList){nextPage = "summary"}  //Skip to summary if there are no doors to handle
@@ -228,10 +228,9 @@ def prefListDevices() {
                 }
 
         }else {
-			def devList = getDeviceList()
 			return dynamicPage(name: "prefListDevices",  title: "Error!", install:false, uninstall:true) {
 				section(""){
-					paragraph "Could not find any supported device(s). Please report to author about these devices: " +  devList
+					paragraph "Could not find any supported device(s). Please report to author about these devices: " +  state.unsupportedList
 				}
 			}
 		}
@@ -318,7 +317,7 @@ def updateVersionInfo(){
 //Get latest versions for SmartApp and Device Handlers
 def getVersionInfo(oldVersion, newVersion){
     def params = [
-        uri:  'https://brbeaird.com/getVersion/myq-beta/' + oldVersion + '/' + newVersion,
+        uri:  'https://brbeaird.herokuapp.com/getVersion/myq-beta/' + oldVersion + '/' + newVersion,
         contentType: 'application/json'
     ]
     def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'handleVersionUpdateResponse'
@@ -328,8 +327,10 @@ def getVersionInfo(oldVersion, newVersion){
 //When version response received (async), update state with the data
 def handleVersionUpdateResponse(response, data) {
     if (response.hasError()) {
-        log.error "response has error: $response.errorMessage"
-    } else {
+        log.error "Error getting version info: ${response.errorMessage}"
+        sendNotificationEvent("Warning: problem getting MyQ version info: ${response.errorMessage}")
+    }
+    else {
         def results = response.json
         state.latestVersion = response.json
         state.latestSmartAppVersion = results.SmartApp;
@@ -407,8 +408,7 @@ def initialize() {
         	log.debug "Light device already exists: " + it
             state.installMsg = state.installMsg + lightsList[it] + ": light device already exists. \r\n\r\n"
         }
-        childLight.updateDeviceStatus(1)
-        //childLight.updateDeviceStatus(state.data[it].status)
+        childLight.updateDeviceStatus(state.data[it].status)
     }
 
     // Remove unselected devices
@@ -753,6 +753,7 @@ def getSelectedDevices( settingsName ) {
 /* Access Management */
 private forceLogin() {
 	//Reset token and expiry
+    log.warn "Refreshing login token"
 	state.session = [ brandID: 0, brandName: settings.brand, securityToken: null, expiration: 0 ]
 	state.data = [:]
 	return doLogin()
@@ -761,8 +762,6 @@ private forceLogin() {
 private login() { return (!(state.session.expiration > now())) ? doLogin() : true }
 
 private doLogin() {
-    log.trace "Logging in"
-
     return apiPostLogin("/api/v4/User/Validate", [username: settings.username, password: settings.password] ) { response ->
         if (response.data.SecurityToken != null) {
             state.session.brandID = response.data.BrandId
@@ -779,10 +778,11 @@ private doLogin() {
 }
 
 // Listing all the garage doors you have in MyQ
-private getDoorList() {
+private getMyQDevices() {
 	state.data = [:]
     state.doorList = [:]
     state.lightList = [:]
+    state.unsupportedList = []
 
     def deviceList = [:]
 	apiGet(getDevicesURL(), []) { response ->
@@ -838,7 +838,7 @@ private getDoorList() {
 
                     //Ignore any doors with blank descriptions
                     if (description != ''){
-                        log.debug "Storing door info: " + description + "type: " + device.MyQDeviceTypeId + " status: " + doorState +  " type: " + device.MyQDeviceTypeName
+                        log.debug "Got valid door: ${description} type: ${device.MyQDeviceTypeId} status: ${doorState} type: ${device.MyQDeviceTypeName}"
                         deviceList[dni] = description
                         state.doorList[dni] = description
                         state.data[dni] = [ status: doorState, lastAction: updatedTime, name: description, type: device.MyQDeviceTypeId, sensor: '', myQDeviceId: device.MyQDeviceId]
@@ -849,7 +849,7 @@ private getDoorList() {
 				}
 
                 //Lights!
-                if (device.MyQDeviceTypeId == 3) {
+                else if (device.MyQDeviceTypeId == 3) {
 					//log.debug "Found light: " + device.MyQDeviceId
                     def dni = [ app.id, "LightController", device.MyQDeviceId ].join('|')
 					def description = ''
@@ -870,39 +870,22 @@ private getDoorList() {
 
                     //Ignore any lights with blank descriptions
                     if (description && description != ''){
-                        log.debug "Storing light info: " + description + "type: " + device.MyQDeviceTypeId + " status: " + doorState +  " type: " + device.MyQDeviceTypeName
+                        log.debug "Got valid light: ${description} type: ${device.MyQDeviceTypeId} status: ${lightState} type: ${device.MyQDeviceTypeName}"
                         deviceList[dni] = description
                         state.lightList[dni] = description
                         state.data[dni] = [ status: lightState, lastAction: updatedTime, name: description, type: device.MyQDeviceTypeId ]
                     }
 				}
-			}
-		}
-	}
-	return deviceList
-}
 
-private getDeviceList() {
-	def deviceList = []
-	apiGet(getDevicesURL(), []) { response ->
-		if (response.status == 200) {
-			response.data.Devices.each { device ->
-				log.debug "MyQDeviceTypeId : " + device.MyQDeviceTypeId.toString()
-				if (!(device.MyQDeviceTypeId == 1||device.MyQDeviceTypeId == 2||device.MyQDeviceTypeId == 3||device.MyQDeviceTypeId == 5||device.MyQDeviceTypeId == 7)) {
+                //Unsupported devices
+                else{
+                    def description = ''
                     device.Attributes.each {
-						def description = ''
-                        def doorState = ''
-                        def updatedTime = ''
-                        if (it.AttributeDisplayName=="desc")	//deviceList[dni] = it.Value
+                        if (it.AttributeDisplayName=="desc")
                         	description = it.Value
-
-                        //Ignore any doors with blank descriptions
-                        if (description && description != ''){
-                        	log.debug "found device: " + description
-                        	deviceList.add( device.MyQDeviceTypeId.toString() + "|" + device.TypeID )
-                        }
 					}
-				}
+                    state.unsupportedList.add([name: description, typeId: device.MyQDeviceTypeId, typeName: device.MyQDeviceTypeName])
+                }
 			}
 		}
 	}
