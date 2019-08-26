@@ -54,10 +54,6 @@ def appInfoSect(sect=true)	{
 	section() { paragraph str, image: getAppImg("myq@2x.png") }
 }
 
-def checkForUpdates(){
-    getVersionInfo('versionCheck', 0, true)
-}
-
 def mainPage() {
 
     state.lastPage = "mainPage"
@@ -205,7 +201,6 @@ def prefUninstall() {
 }
 
 def prefListDevices() {
-    //getVersionInfo(0, 0);
     state.lastPage = "prefListDevices"
     getSelectedDevices("lights")
     if (doLogin()) {
@@ -247,7 +242,6 @@ def prefListDevices() {
 
 
 def sensorPage() {
-    log.debug "Doors chosen: " + doors
 
     //Sometimes ST has an issue where stale options are not properly dropped from settings. Let's get a true count of valid doors selected
     state.validatedDoors = []
@@ -295,16 +289,16 @@ def summary() {
 
 /* Initialization */
 def installed() {
-	if (door1Sensor && state.validatedDoors){
-    	refreshAll()
-        unschedule()
-    }
+	// if (door1Sensor && state.validatedDoors){
+    // 	refreshAll()
+    //     unschedule()
+    // }
 }
 
 def updated() {
 	log.debug "Updated..."
     unschedule()
-    runEvery3Hours(updateVersionInfo)
+    runEvery3Hours(updateVersionInfo)   //Check for new version every 3 hours
 
     if (state.previousVersion != state.thisSmartAppVersion){
     	getVersionInfo(state.previousVersion, state.thisSmartAppVersion);
@@ -316,11 +310,41 @@ def updated() {
     stateCleanup()
 }
 
+//Called from scheduler every 3 hours
 def updateVersionInfo(){
 	getVersionInfo('versionCheck', '0')
 }
 
+//Get latest versions for SmartApp and Device Handlers
+def getVersionInfo(oldVersion, newVersion){
+    def params = [
+        uri:  'https://brbeaird.com/getVersion/myq-beta/' + oldVersion + '/' + newVersion,
+        contentType: 'application/json'
+    ]
+    def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'handleVersionUpdateResponse'
+    asynchttp_v1.get(callbackMethod, params)
+}
 
+//When version response received (async), update state with the data
+def handleVersionUpdateResponse(response, data) {
+    if (response.hasError()) {
+        log.error "response has error: $response.errorMessage"
+    } else {
+        def results = response.json
+        state.latestVersion = response.json
+        state.latestSmartAppVersion = results.SmartApp;
+        state.latestDoorVersion = results.DoorDevice;
+        state.latestDoorNoSensorVersion = results.DoorDeviceNoSensor;
+        state.latestLightVersion = results.LightDevice;
+    }
+}
+
+//In case of periodic update check, also refresh installed versions and update the version warning message
+def updateCheck(response, data) {
+	handleVersionUpdateResponse(response,data)
+    refreshChildren()
+    updateVersionMessage()
+}
 
 def uninstall(){
     log.debug "Removing MyQ Devices..."
@@ -419,9 +443,6 @@ def initialize() {
     }
 }
 
-private validateDoorMyQId(door, doorName, childDevice){
-
-}
 
 def createChilDevices(door, sensor, doorName, prefPushButtons){
 	log.debug "In CreateChild for ${doorName}"
@@ -1110,33 +1131,7 @@ def sendCommand(child, attributeName, attributeValue) {
 	}
 }
 
-def getVersionInfo(oldVersion, newVersion){
-    def params = [
-        uri:  'https://brbeaird.com/getVersion/myq-beta/' + oldVersion + '/' + newVersion,
-        contentType: 'application/json'
-    ]
-    def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'responseHandlerMethod'
-    asynchttp_v1.get(callbackMethod, params)
-}
 
-def updateCheck(response, data) {
-	responseHandlerMethod(response,data)
-    refreshChildren()
-    updateVersionMessage()
-}
-
-def responseHandlerMethod(response, data) {
-    if (response.hasError()) {
-        log.error "response has error: $response.errorMessage"
-    } else {
-        def results = response.json
-        state.latestVersion = response.json
-        state.latestSmartAppVersion = results.SmartApp;
-        state.latestDoorVersion = results.DoorDevice;
-        state.latestDoorNoSensorVersion = results.DoorDeviceNoSensor;
-        state.latestLightVersion = results.LightDevice;
-    }
-}
 
 //Remove old unused pieces of state
 def stateCleanup(){
