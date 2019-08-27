@@ -91,34 +91,6 @@ def versionCompare(deviceName){
     }
 }
 
-def updateVersionMessage(){
-	state.versionMsg = ""
-    state.currentVersion.each { device, version ->
-    	if (versionCompare(device) != 'latest'){
-        	state.versionMsg = "MyQ Lite Updates are available."
-    	}
-    }
-
-    //Notify if updates are available
-    if (state.versionMsg != ""){
-        sendNotificationEvent(state.versionMsg)
-
-        //Send push notification if enabled
-        if (prefUpdateNotify){
-
-            //Don't notify if we've sent a notification within the last 1 day
-            if (state.lastVersionNotification){
-            	def timeSinceLastNotification = (now() - state.lastVersionNotification) / 1000
-                if (timeSinceLastNotification < 60*60*23){
-                	return
-                }
-            }
-            sendPush(state.versionMsg)
-            state.lastVersionNotification = now()
-    	}
-    }
-}
-
 def refreshChildren(){
 	state.currentVersion = [:]
     state.currentVersion['SmartApp'] = appVersion()
@@ -142,8 +114,6 @@ def refreshChildren(){
     }
     return devices
 }
-
-
 
 /* Preferences */
 def prefLogIn(params) {
@@ -203,7 +173,7 @@ def prefUninstall() {
 def prefListDevices() {
     state.lastPage = "prefListDevices"
     getSelectedDevices("lights")
-    if (doLogin()) {
+    if (login()) {
 		def doorList = getMyQDevices()
 		if ((state.doorList) || (state.lightList)){
         	def nextPage = "sensorPage"
@@ -309,6 +279,8 @@ def updated() {
     stateCleanup()
 }
 
+/* Version Checking */
+
 //Called from scheduler every 3 hours
 def updateVersionInfo(){
 	getVersionInfo('versionCheck', '0')
@@ -346,6 +318,35 @@ def updateCheck(response, data) {
     refreshChildren()
     updateVersionMessage()
 }
+
+def updateVersionMessage(){
+	state.versionMsg = ""
+    state.currentVersion.each { device, version ->
+    	if (versionCompare(device) != 'latest'){
+        	state.versionMsg = "MyQ Lite Updates are available."
+    	}
+    }
+
+    //Notify if updates are available
+    if (state.versionMsg != ""){
+        sendNotificationEvent(state.versionMsg)
+
+        //Send push notification if enabled
+        if (prefUpdateNotify){
+
+            //Don't notify if we've sent a notification within the last 1 day
+            if (state.lastVersionNotification){
+            	def timeSinceLastNotification = (now() - state.lastVersionNotification) / 1000
+                if (timeSinceLastNotification < 60*60*23){
+                	return
+                }
+            }
+            sendPush(state.versionMsg)
+            state.lastVersionNotification = now()
+    	}
+    }
+}
+
 
 def uninstall(){
     log.debug "Removing MyQ Devices..."
@@ -443,9 +444,7 @@ def initialize() {
     }
 }
 
-
 def createChilDevices(door, sensor, doorName, prefPushButtons){
-	log.debug "In CreateChild for ${doorName}"
     def sensorTypeName = "MyQ Garage Door Opener"
     def noSensorTypeName = "MyQ Garage Door Opener-NoSensor"
     def lockTypeName = "MyQ Lock Door"
@@ -635,10 +634,8 @@ def syncDoorsWithSensors(child){
     // refresh only the requesting door (makes things a bit more efficient if you have more than 1 door
     if (child) {
     	def doorDNI = child.device.deviceNetworkId
-        log.debug "got DNI for ${child}: ${doorDNI}"
         updateDoorStatus(doorDNI, settings[state.data[doorDNI].sensor], '', '', child)
     }
-
     //Otherwise, refresh everything
     else{
         state.validatedDoors.each { door ->
@@ -662,9 +659,7 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
         }
 
         def value = "unknown"
-        def moving = "unknown"
         def door = doorToUpdate.latestValue("door")
-
         value = sensor.latestValue("contact")
 
         doorToUpdate.updateDeviceStatus(value)
@@ -686,8 +681,6 @@ def updateDoorStatus(doorDNI, sensor, acceleration, threeAxis, child){
             timeStampLogText = "Door: " + doorName + ": Null timestamp detected "  + " -  from sensor " + sensor + " . Keeping current value."
         else
             doorToUpdate.updateDeviceLastActivity(latestEvent)
-
-        log.debug timeStampLogText
 
         //Write to child log if this was initiated from one of the doors
         if (child)
@@ -717,7 +710,7 @@ def sensorHandler(evt) {
     log.debug "Sensor change detected: Event name  " + evt.name + " value: " + evt.value   + " deviceID: " + evt.deviceId
 
     state.validatedDoors.each{ door ->
-    	if (settings[state.data[door].sensor].id == evt.deviceId)
+    	if (settings[state.data[door].sensor]?.id == evt.deviceId)
             log.debug "Updating door status ${door} , ${settings[state.data[door].sensor]}"
             updateDoorStatus(door, settings[state.data[door].sensor], '', '', null)
     }
@@ -753,19 +746,26 @@ def getSelectedDevices( settingsName ) {
 /* Access Management */
 private forceLogin() {
 	//Reset token and expiry
-    log.warn "Refreshing login token"
+    log.warn "forceLogin: Refreshing login token"
 	state.session = [ brandID: 0, brandName: settings.brand, securityToken: null, expiration: 0 ]
-	state.data = [:]
 	return doLogin()
 }
 
-private login() { return (!(state.session.expiration > now())) ? doLogin() : true }
+private login() {
+	if (now() > state.session.expiration){
+    	log.warn "Token has expired. Logging in again."
+        doLogin()
+    }
+    else{
+    	return true;
+    }
+}
+//return (!(state.session.expiration > now())) ? doLogin() : true }
 
 private doLogin() {
     return apiPostLogin("/api/v4/User/Validate", [username: settings.username, password: settings.password] ) { response ->
         if (response.data.SecurityToken != null) {
-            state.session.brandID = response.data.BrandId
-            state.session.brandName = response.data.BrandName
+            state.session.brandName = settings.brand
             state.session.securityToken = response.data.SecurityToken
             state.session.expiration = now() + (7*24*60*60*1000) // 7 days default
             return true
@@ -787,18 +787,14 @@ private getMyQDevices() {
     def deviceList = [:]
 	apiGet(getDevicesURL(), []) { response ->
 		if (response.status == 200) {
-            //log.debug "response data: " + response.data
-            //sendAlert("response data: " + response.data.Devices)
 			response.data.Devices.each { device ->
 				// 2 = garage door, 5 = gate, 7 = MyQGarage(no gateway), 9 = commercial door, 17 = Garage Door Opener WGDO
 				if (device.MyQDeviceTypeId == 2||device.MyQDeviceTypeId == 5||device.MyQDeviceTypeId == 7||device.MyQDeviceTypeId == 17||device.MyQDeviceTypeId == 9) {
-					//log.debug "Found door: " + device.MyQDeviceId
                     def dni = [ app.id, "GarageDoorOpener", device.MyQDeviceId ].join('|')
 					def description = ''
                     def doorState = ''
                     def updatedTime = ''
                     device.Attributes.each {
-
                         if (it.AttributeDisplayName=="desc")	//deviceList[dni] = it.Value
                         {
                         	description = it.Value
@@ -809,7 +805,6 @@ private getMyQDevices() {
                             updatedTime = it.UpdatedTime
 						}
 					}
-
 
                     //Sometimes MyQ has duplicates. Check and see if we've seen this door before
                         def doorToRemove = ""
@@ -915,7 +910,6 @@ def getHubID(){
     }
 }
 
-
 /* api connection */
 private getDevicesURL(){
 	return "/api/v4/UserDeviceDetails/Get"
@@ -923,7 +917,7 @@ private getDevicesURL(){
 
 import groovy.transform.Field
 
-@Field final MAX_RETRIES = 2 // Retry count before giving up
+@Field final MAX_RETRIES = 1 // Retry count before giving up
 
 // get URL
 private getApiURL() {
@@ -942,16 +936,8 @@ private getApiAppID() {
 	}
 }
 
-// HTTP GET call
-private apiGet(apiPath, apiQuery = [], callback = {}) {
-    if (!state.session.securityToken) { // Get a token
-        if (!doLogin()) {
-            log.error "Unable to complete GET, login failed"
-            return
-        }
-    }
-
-    def myHeaders = [
+private getMyQHeaders() {
+	return [
         "User-Agent": "Chamberlain/3.73",
         "SecurityToken": state.session.securityToken,
         "BrandId": "2",
@@ -959,33 +945,65 @@ private apiGet(apiPath, apiQuery = [], callback = {}) {
         "Culture": "en",
         "MyQApplicationId": getApiAppID()
     ]
+}
 
-    try {
-        httpGet([ uri: getApiURL(), path: apiPath, headers: myHeaders, query: apiQuery ]) { response ->
-            //log.debug "Got GET response: Retry: ${atomicState.retryCount} of ${MAX_RETRIES}\nSTATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
-            if (response.status == 200) {
-                switch (response.data.ReturnCode as Integer) {
-                    case -3333: // Login again
-                    	if (atomicState.retryCount <= MAX_RETRIES) {
-                        	atomicState.retryCount = (atomicState.retryCount ?: 0) + 1
-                            log.warn "GET: Login expired, logging in again"
-                            doLogin()
-                            apiGet(apiPath, apiQuery, callback) // Try again
-                        } else {
-                            log.warn "Too many retries, dropping request"
-                        }
-                        break
+//handleApiResponse(response, apiGet, apiPath)
+def isGoodResponse(response){
+    log.debug "Got response: STATUS: ${response.status}\nDATA: ${response.data}"
+    def returnCode = -1
+    if (response.status == 200) {
+        switch (response.data.ReturnCode as Integer) {
+            //Good response
+            case 0:
+                state.retryCount = 0 // Reset it
+                returnCode = 0
+                break
 
-                    case 0: // Process response
-                    	atomicState.retryCount = 0 // Reset it
-                    	callback(response)
-                        break
+            //If bad login response, clear out token and try again
+            case -3333: // Login again
+                if (state.retryCount <= MAX_RETRIES) {
+                    state.retryCount = (state.retryCount ?: 0) + 1
+                    log.warn "GET: Login expired, logging in again"
+                    if (1 == 1){
+                    //if (forceLogin()){
+                    	returnCode = 1
+                        log.warn "GET: Re-login successful."
+                    }
+                    else{
+                    	returnCode = -1
+                        log.warn "GET: Re-login failed."
+                    }
 
-                    default:
-                    	log.error "Unknown GET return code ${response.data.ReturnCode}, error ${response.data.ErrorMessage}"
+                    //retryCallback() // Try again
+                } else {
+                    log.warn "Too many retries, dropping request"
                 }
-            } else {
-                log.error "Unknown GET status: ${response.status}"
+                break
+
+            default:
+                log.error "Unknown return code ${response.data.ReturnCode}, error ${response.data.ErrorMessage}"
+        }
+    } else {
+        log.error "Unknown status: ${response.status}"
+    }
+    return returnCode
+}
+
+// HTTP GET call
+private apiGet(apiPath, apiQuery = [], callback = {}) {
+    if (!login()){
+        log.error "Unable to complete GET, login failed"
+        return
+    }
+    try {
+        log.debug "Calling out GET ${getApiURL()} ${apiPath} ${getMyQHeaders()}"
+        httpGet([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), query: apiQuery ]) { response ->
+            def result = isGoodResponse(response)
+            if (result == 0) {
+            	callback(response)
+            }
+            else if (result == 1){
+            	apiGet(apiPath, apiQuery, callback) // Try again
             }
         }
     }	catch (e)	{
@@ -995,48 +1013,20 @@ private apiGet(apiPath, apiQuery = [], callback = {}) {
 
 // HTTP PUT call
 private apiPut(apiPath, apiBody = [], callback = {}) {
-    if (!state.session.securityToken) { // Get a token
-        if (!doLogin()) {
-            log.error "Unable to complete PUT, login failed"
-            return
-        }
+    if (!login()){
+        log.error "Unable to complete PUT, login failed"
+        sendNotificationEvent("Warning: MyQ command failed due to bad login.")
+        return
     }
-    def myHeaders = [
-        "User-Agent": "Chamberlain/3.73",
-        "SecurityToken": state.session.securityToken,
-        "BrandId": "2",
-        "ApiVersion": "4.1",
-        "Culture": "en",
-        "MyQApplicationId": getApiAppID()
-    ]
-
     try {
-        log.debug "put body ${apiBody}"
-        httpPut([ uri: getApiURL(), path: apiPath, headers: myHeaders, body: apiBody ]) { response ->
-            log.debug "Got PUT response: Retry: ${atomicState.retryCount} of ${MAX_RETRIES}\nSTATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
-            if (response.status == 200) {
-                switch (response.data.ReturnCode as Integer) {
-                    case -3333: // Login again
-                    	if (atomicState.retryCount <= MAX_RETRIES) {
-                        	atomicState.retryCount = (atomicState.retryCount ?: 0) + 1
-                            log.warn "PUT: Login expired, logging in again"
-                            doLogin()
-                            apiPut(apiPath, apiBody, callback) // Try again
-                        } else {
-                            log.warn "Too many retries, dropping request"
-                        }
-                        break
-
-                    case 0: // Process response
-                    	atomicState.retryCount = 0 // Reset it
-                    	callback(response)
-                        break
-
-                    default:
-                    	log.error "Unknown PUT return code ${response.data.ReturnCode}, error ${response.data.ErrorMessage}"
-                }
-            } else {
-                log.error "Unknown PUT status: ${response.status}"
+        log.debug "Calling out PUT ${apiPath} ${apiBody}"
+        httpPut([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), body: apiBody ]) { response ->
+            def result = isGoodResponse(response)
+            if (result == 0) {
+            	callback(response)
+            }
+            else if (result == 1){
+            	apiPut(apiPath, apiBody, callback) // Try again
             }
         }
     } catch (e)	{
@@ -1046,18 +1036,9 @@ private apiPut(apiPath, apiBody = [], callback = {}) {
 
 // HTTP POST call
 private apiPostLogin(apiPath, apiBody = [], callback = {}) {
-    def myHeaders = [
-        "User-Agent": "Chamberlain/3.73",
-        "BrandId": "2",
-        "ApiVersion": "4.1",
-        "Culture": "en",
-        "MyQApplicationId": getApiAppID()
-    ]
-
     try {
-        //log.debug "login body: ${apiBody}"
-        return httpPost([ uri: getApiURL(), path: apiPath, headers: myHeaders, body: apiBody ]) { response ->
-            //log.debug "Got LOGIN POST response: STATUS: ${response.status}\nHEADERS: ${response.headers?.collect { "${it.name}: ${it.value}\n" }}\nDATA: ${response.data}"
+        return httpPost([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), body: apiBody ]) { response ->
+            //log.debug "Got LOGIN POST response: STATUS: ${response.status}\n\nDATA: ${response.data}"
             if (response.status == 200) {
                 switch (response.data.ReturnCode as Integer) {
                     case 0: // Process response
@@ -1076,7 +1057,6 @@ private apiPostLogin(apiPath, apiBody = [], callback = {}) {
     } catch (e)	{
         log.warn "API POST Error: $e"
     }
-
     return false
 }
 
@@ -1098,22 +1078,9 @@ def getDeviceLastActivity(child) {
 // Send command to start or stop
 def sendCommand(child, attributeName, attributeValue) {
 	state.lastCommandSent = now()
-    if (login()) {
-		//Send command
-		//apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: getChildDeviceID(child), AttributeName: attributeName, AttributeValue: attributeValue ])
-        apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: child.getMyQId(), AttributeName: attributeName, AttributeValue: attributeValue ])
-
-        /*
-        if ((attributeName == "desireddoorstate") && (attributeValue == 0)) {		// if we are closing, check if we have an Acceleration sensor, if so, "waiting" until it moves
-            def firstDoor = state.validatedDoors[0]
-    		if (doors instanceof String) firstDoor = doors
-        	def doorDNI = child.device.deviceNetworkId
-        	//if (door1Sensor){if (door1Acceleration) child.updateDeviceStatus("waiting") else child.updateDeviceStatus("closing")}*/
-        //}
-		return true
-	}
+    apiPut("/api/v4/DeviceAttribute/PutDeviceAttribute", [ MyQDeviceId: child.getMyDeviceQId(), AttributeName: attributeName, AttributeValue: attributeValue ])
+    return true
 }
-
 
 
 //Remove old unused pieces of state
