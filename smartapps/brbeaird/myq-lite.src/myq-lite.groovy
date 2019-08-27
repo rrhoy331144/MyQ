@@ -20,7 +20,7 @@
 include 'asynchttp_v1'
 
 String appVersion() { return "3.0.0" }
-String appModified() { return "2019-08-26"}
+String appModified() { return "2019-08-27"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_MyQ/master/icons/$imgName" }
@@ -55,7 +55,6 @@ def appInfoSect(sect=true)	{
 }
 
 def mainPage() {
-
     state.lastPage = "mainPage"
     getVersionInfo(0, 0)
     dynamicPage(name: "mainPage", nextPage: "", uninstall: false, install: true) {
@@ -68,6 +67,7 @@ def mainPage() {
         section("Connected Devices") {
         	paragraph title: "", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
             href "prefListDevices", title: "", description: "Tap to modify devices"
+            input "prefDoorErrorNotify", "bool", required: false, defaultValue: true, title: "Notify on door command errors?"
         }
         section("App and Handler Versions"){
             state.currentVersion.each { device, version ->
@@ -258,10 +258,7 @@ def summary() {
 
 /* Initialization */
 def installed() {
-	// if (door1Sensor && state.validatedDoors){
-    // 	refreshAll()
-    //     unschedule()
-    // }
+
 }
 
 def updated() {
@@ -760,7 +757,6 @@ private login() {
     	return true;
     }
 }
-//return (!(state.session.expiration > now())) ? doLogin() : true }
 
 private doLogin() {
     return apiPostLogin("/api/v4/User/Validate", [username: settings.username, password: settings.password] ) { response ->
@@ -777,7 +773,7 @@ private doLogin() {
     }
 }
 
-// Listing all the garage doors you have in MyQ
+//Get devices listed on your MyQ account
 private getMyQDevices() {
 	state.data = [:]
     state.doorList = [:]
@@ -795,7 +791,7 @@ private getMyQDevices() {
                     def doorState = ''
                     def updatedTime = ''
                     device.Attributes.each {
-                        if (it.AttributeDisplayName=="desc")	//deviceList[dni] = it.Value
+                        if (it.AttributeDisplayName=="desc")
                         {
                         	description = it.Value
                         }
@@ -843,7 +839,7 @@ private getMyQDevices() {
                     }
 				}
 
-                //Lights!
+                //Lights
                 else if (device.MyQDeviceTypeId == 3) {
 					//log.debug "Found light: " + device.MyQDeviceId
                     def dni = [ app.id, "LightController", device.MyQDeviceId ].join('|')
@@ -910,7 +906,7 @@ def getHubID(){
     }
 }
 
-/* api connection */
+/* API Methods */
 private getDevicesURL(){
 	return "/api/v4/UserDeviceDetails/Get"
 }
@@ -947,7 +943,56 @@ private getMyQHeaders() {
     ]
 }
 
-//handleApiResponse(response, apiGet, apiPath)
+
+// HTTP GET call (Get Devices)
+private apiGet(apiPath, apiQuery = [], callback = {}) {
+    if (!login()){
+        log.error "Unable to complete GET, login failed"
+        return
+    }
+    try {
+        log.debug "Calling out GET ${getApiURL()} ${apiPath} ${getMyQHeaders()}"
+        httpGet([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), query: apiQuery ]) { response ->
+            def result = isGoodResponse(response)
+            if (result == 0) {
+            	callback(response)
+            }
+            else if (result == 1){
+            	apiGet(apiPath, apiQuery, callback) // Try again
+            }
+        }
+    }	catch (e)	{
+        log.error "API GET Error: $e"
+    }
+}
+
+// HTTP PUT call (Send commands)
+private apiPut(apiPath, apiBody = [], callback = {}) {
+    if (!login()){
+        log.error "Unable to complete PUT, login failed"
+        sendNotificationEvent("Warning: MyQ command failed due to bad login.")
+        if (prefDoorErrorNotify){log.error "would have pushed notification"}
+        return
+    }
+    try {
+        log.debug "Calling out PUT ${apiPath} ${apiBody}"
+        httpPut([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), body: apiBody ]) { response ->
+            def result = isGoodResponse(response)
+            if (result == 0) {
+            	callback(response)
+            }
+            else if (result == 1){
+            	apiPut(apiPath, apiBody, callback) // Try again
+            }
+        }
+    } catch (e)	{
+        log.error "API PUT Error: $e"
+        sendNotificationEvent("Warning: MyQ command failed - ${e}")
+        if (prefDoorErrorNotify){log.error "would have pushed notification"}
+    }
+}
+
+//Check response and retry login if needed
 def isGoodResponse(response){
     log.debug "Got response: STATUS: ${response.status}\nDATA: ${response.data}"
     def returnCode = -1
@@ -989,52 +1034,7 @@ def isGoodResponse(response){
     return returnCode
 }
 
-// HTTP GET call
-private apiGet(apiPath, apiQuery = [], callback = {}) {
-    if (!login()){
-        log.error "Unable to complete GET, login failed"
-        return
-    }
-    try {
-        log.debug "Calling out GET ${getApiURL()} ${apiPath} ${getMyQHeaders()}"
-        httpGet([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), query: apiQuery ]) { response ->
-            def result = isGoodResponse(response)
-            if (result == 0) {
-            	callback(response)
-            }
-            else if (result == 1){
-            	apiGet(apiPath, apiQuery, callback) // Try again
-            }
-        }
-    }	catch (e)	{
-        log.error "API GET Error: $e"
-    }
-}
-
-// HTTP PUT call
-private apiPut(apiPath, apiBody = [], callback = {}) {
-    if (!login()){
-        log.error "Unable to complete PUT, login failed"
-        sendNotificationEvent("Warning: MyQ command failed due to bad login.")
-        return
-    }
-    try {
-        log.debug "Calling out PUT ${apiPath} ${apiBody}"
-        httpPut([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), body: apiBody ]) { response ->
-            def result = isGoodResponse(response)
-            if (result == 0) {
-            	callback(response)
-            }
-            else if (result == 1){
-            	apiPut(apiPath, apiBody, callback) // Try again
-            }
-        }
-    } catch (e)	{
-        log.error "API PUT Error: $e"
-    }
-}
-
-// HTTP POST call
+// HTTP POST call (Login)
 private apiPostLogin(apiPath, apiBody = [], callback = {}) {
     try {
         return httpPost([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), body: apiBody ]) { response ->
@@ -1060,21 +1060,6 @@ private apiPostLogin(apiPath, apiBody = [], callback = {}) {
     return false
 }
 
-// Get Device ID
-def getChildDeviceID(child) {
-	return child.device.deviceNetworkId.split("\\|")[2]
-}
-
-// Get single device status
-def getDeviceStatus(child) {
-	return state.data[child.device.deviceNetworkId].status
-}
-
-// Get single device last activity
-def getDeviceLastActivity(child) {
-	return state.data[child.device.deviceNetworkId].lastAction.toLong()
-}
-
 // Send command to start or stop
 def sendCommand(child, attributeName, attributeValue) {
 	state.lastCommandSent = now()
@@ -1097,6 +1082,7 @@ def stateCleanup(){
     if (state.polling){state.remove('polling')}
 }
 
+//Available to be called from child devices for special logging
 def notify(message){
 	sendNotificationEvent(message)
 }
