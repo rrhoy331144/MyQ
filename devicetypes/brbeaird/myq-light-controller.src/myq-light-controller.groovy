@@ -13,7 +13,6 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *  Last Updated : 8/27/2019
  *
  */
 metadata {
@@ -53,7 +52,6 @@ def off() {
 }
 
 def updateDeviceStatus(status) {
-	log.debug "Updating status to ${status.toInteger()}"
     if (status.toInteger() == 0)
     {
     	log.debug "Updating status to off"
@@ -68,15 +66,19 @@ def updateDeviceStatus(status) {
     }
 }
 
-def getMyDeviceQId(){
+def getMyQDeviceId(){
     if (device.currentState("myQDeviceId")?.value)
     	return device.currentState("myQDeviceId").value
 	else{
         def newId = device.deviceNetworkId.split("\\|")[2]
-        parent.notify("got new hotness ${newId}")
         sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
         return newId
     }
+}
+
+def updateMyQDeviceId(Id) {
+	log.debug "Setting MyQID to ${Id}"
+    sendEvent(name: "myQDeviceId", value: Id, display: true , displayed: true)
 }
 
 def showVersion(){

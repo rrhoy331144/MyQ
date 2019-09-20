@@ -1,11 +1,7 @@
 /**
- * -----------------------
- * --- DEVICE HANDLER ----
- * -----------------------
- *
  *  MyQ Garage Door Opener NoSensor
  *
- *  Copyright 2018 Brian Beaird
+ *  Copyright 2019 Brian Beaird
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -16,8 +12,6 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *  Last Updated : 2019-01-04
- *
  */
 metadata {
 	definition (name: "MyQ Garage Door Opener-NoSensor", namespace: "brbeaird", author: "Brian Beaird", vid: "generic-contact-4", ocfdevicetype: "oic.d.garagedoor", mnmn: "SmartThings") {
@@ -25,34 +19,35 @@ metadata {
 		capability "Garage Door Control"
 		capability "Actuator"
         //capability "Health Check" Will be needed eventually for new app compatability but is not documented well enough yet
-        
+
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
         attribute "myQDeviceId", "string"
-        
+
         command "open"
         command "close"
+        command "updateMyQDeviceId", ["string"]
 	}
 
 	simulator {	}
 
 	tiles {
-		
+
 		multiAttributeTile(name:"door", type: "lighting", width: 6, height: 4, canChangeIcon: false) {
 			tileAttribute ("device.door", key: "PRIMARY_CONTROL") {
-				attributeState "unknown", label:'MyQ Door (No sensor)', icon:"st.doors.garage.garage-closed",    backgroundColor:"#6495ED"				
-			}			
+				attributeState "unknown", label:'MyQ Door (No sensor)', icon:"st.doors.garage.garage-closed",    backgroundColor:"#6495ED"
+			}
 		}
-      
+
         standardTile("openBtn", "device.OpenButton", width: 3, height: 3) {
             state "normal", label: 'Open', icon: "st.doors.garage.garage-open", backgroundColor: "#e86d13", action: "open", nextState: "opening"
             state "opening", label: 'Opening', icon: "st.doors.garage.garage-opening", backgroundColor: "#cec236", action: "open"
 		}
-        standardTile("closeBtn", "device.CloseButton", width: 3, height: 3) {            
+        standardTile("closeBtn", "device.CloseButton", width: 3, height: 3) {
             state "normal", label: 'Close', icon: "st.doors.garage.garage-closed", backgroundColor: "#00a0dc", action: "close", nextState: "closing"
             state "closing", label: 'Closing', icon: "st.doors.garage.garage-closing", backgroundColor: "#cec236", action: "close"
 		}
-        
+
 		main "door"
 		details(["door", "openBtn", "closeBtn"])
 	}
@@ -60,11 +55,11 @@ metadata {
 
 def open()  {
     openPrep()
-    parent.sendCommand(this, "desireddoorstate", 1)    
+    parent.sendCommand(this, "desireddoorstate", 1)
 }
 def close() {
     closePrep()
-    parent.sendCommand(this, "desireddoorstate", 0) 
+    parent.sendCommand(this, "desireddoorstate", 0)
 }
 
 def openPrep(){
@@ -87,15 +82,19 @@ def resetToUnknown(){
     sendEvent(name: "CloseButton", value: "normal", displayed: false, isStateChange: true)
 }
 
-def getMyDeviceQId(){	    
+def getMyQDeviceId(){
     if (device.currentState("myQDeviceId")?.value)
     	return device.currentState("myQDeviceId").value
-	else{    	
+	else{
         def newId = device.deviceNetworkId.split("\\|")[2]
-        parent.notify("got new hotness ${newId}")
         sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
         return newId
-    }	
+    }
+}
+
+def updateMyQDeviceId(Id) {
+	log.debug "Setting MyQID to ${Id}"
+    sendEvent(name: "myQDeviceId", value: Id, display: true , displayed: true)
 }
 
 def log(msg){
@@ -103,5 +102,5 @@ def log(msg){
 }
 
 def showVersion(){
-	return "1.1.8"
+	return "3.0.0"
 }
