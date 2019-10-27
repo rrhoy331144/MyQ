@@ -5,6 +5,8 @@
  *
  *  MyQ Garage Door Opener
  *
+ *  https://raw.githubusercontent.com/dcmeglio/hubitat-myq/master/devicetypes/brbeaird/myq-garage-door-opener.src/myq-garage-door-opener.groovy
+ *
  *  Copyright 2019 Jason Mok/Brian Beaird/Barry Burke
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -99,14 +101,14 @@ metadata {
 	}
 }
 
-def on() {
-    log.debug "Turning door on!"
+def on() { 	
+    if (logEnable) log.debug "Turning door on!"
     open()
     sendEvent(name: "switch", value: "on", isStateChange: true, display: true, displayed: true)
 }
-def off() {
-    log.debug "Turning door off!"
-    close()
+def off() { 	
+    if (logEnable) log.debug "Turning door off!"
+    close()    
 	sendEvent(name: "switch", value: "off", isStateChange: true, display: true, displayed: true)
 }
 
@@ -120,16 +122,17 @@ def push() {
 	sendEvent(name: "momentary", value: "pushed", display: false, displayed: false, isStateChange: true)
 }
 
-def open()  {
-	log.debug "Garage door open command called."
+def open()  { 
+	if (logEnable) log.debug "Garage door open command called."
     parent.notify("Garage door open command called.")
     updateDeviceStatus("opening")
     parent.sendCommand(getMyQDeviceId(), "open")
 
     runIn(20, refresh, [overwrite: true])	//Force a sync with tilt sensor after 20 seconds
 }
-def close() {
-	log.debug "Garage door close command called."
+
+def close() { 
+	if (logEnable) log.debug "Garage door close command called."
     parent.notify("Garage door close command called.")
 	parent.sendCommand(getMyQDeviceId(), "close")
 	updateDeviceStatus("closing")			// Now handled in the parent (in case we have an Acceleration sensor, we can handle "waiting" state)
@@ -166,20 +169,20 @@ def updateDeviceStatus(status) {
 
     //Don't do anything if nothing changed
     if (currentState == status && switchState == status){
-    	log.debug "No change; door is already set to " + status
+    	if (logEnable) log.debug "No change; door is already set to " + status
         status = ""
     }
 
     switch (status) {
 		case "open":
-    		log.debug "Door is now open"
-			sendEvent(name: "door", value: "open", display: true, isStateChange: true, descriptionText: device.displayName + " is open")
+    		if (logEnable) log.debug "Door is now open"
+			sendEvent(name: "door", value: "open", display: true, isStateChange: true, descriptionText: device.displayName + " is open") 
 			sendEvent(name: "contact", value: "open", display: false, displayed: false, isStateChange: true)	// make sure we update the hidden states as well
         	sendEvent(name: "switch", value: "on", display: false, displayed: false, isStateChange: true)		// on == open
             break
 
         case "closed":
-			log.debug "Door is now closed"
+			if (logEnable) log.debug "Door is now closed"
         	sendEvent(name: "door", value: "closed", display: true, isStateChange: true, descriptionText: device.displayName + " is closed")
 			sendEvent(name: "contact", value: "closed", display: false, displayed: false, isStateChange: true)	// update hidden states
         	sendEvent(name: "switch", value: "off", display: false, displayed: false, isStateChange: true)		// off == closed
@@ -187,7 +190,7 @@ def updateDeviceStatus(status) {
 
 		case "opening":
 			if (currentState == "open"){
-        		log.debug "Door is already open. Leaving status alone."
+        		if (logEnable) log.debug "Door is already open. Leaving status alone."
         	}
         	else{
         		sendEvent(name: "door", value: "opening", descriptionText: "Sent opening command.", display: false, displayed: true, isStateChange: true)
@@ -196,7 +199,7 @@ def updateDeviceStatus(status) {
 
 		case "closing":
     		if(currentState == "closed"){
-        		log.debug "Door is already closed. Leaving status alone."
+        		if (logEnable) log.debug "Door is already closed. Leaving status alone."
         	}
 			else{
         		sendEvent(name: "door", value: "closing", display: false, displayed: false, isStateChange: true)
@@ -205,14 +208,14 @@ def updateDeviceStatus(status) {
 
     	case "stopped":
     		if (currentState != "closed") {
-    			log.debug "Door is stopped"
+    			if (logEnable) log.debug "Door is stopped"
     			sendEvent(name: "door", value: "stopped", display: false, displayed: false, isStateChange: true)
         	}
             break
 
         case "waiting":
         	if (currentState == "open") {
-            	log.debug "Door is waiting before closing"
+            	if (logEnable) log.debug "Door is waiting before closing"
                 sendEvent(name: "door", value: "waiting", display: false, displayed: false, isStateChange: true)
             }
             break
@@ -241,12 +244,12 @@ def updateDeviceMoving(moving) {
 }
 
 def updateMyQDeviceId(Id) {
-	log.debug "Setting MyQID to ${Id}"
+	if (logEnable) log.debug "Setting MyQID to ${Id}"
     sendEvent(name: "myQDeviceId", value: Id, display: true , displayed: true)
 }
 
 def log(msg){
-	log.debug msg
+	if (logEnable) log.debug msg
 }
 
 def showVersion(){
