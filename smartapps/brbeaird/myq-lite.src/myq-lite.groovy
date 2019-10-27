@@ -83,7 +83,7 @@ def mainPage() {
         appInfoSect()
         def devs = refreshChildren()
         section("MyQ Account"){
-			paragraph title: "", "Email: ${settings.username}\n"
+            paragraph title: "", "Email: ${settings.username}"
             href "prefLogIn", title: "", description: "Tap to modify account", params: [nextPageName: "mainPage"]
         }
         section("Connected Devices") {
@@ -1053,12 +1053,15 @@ private apiGet(apiPath, apiQuery = [], callback = {}) {
         log.error "Unable to complete GET, login failed"
         return
     }
-    try {        
-
+    try {
+        def myHeaders = [
+        "SecurityToken": state.session.securityToken,
+        "MyQApplicationId": getApiAppID(),
+        "Content-Type": "application/json"
+    ]
         //log.debug "API Callout: GET ${getApiURL()}${apiPath} headers: ${getMyQHeaders()}"
 		
         httpGet([ uri: getApiURL(), path: apiPath, headers: getMyQHeaders(), query: apiQuery ]) { response ->            
-            log.debug "called"
 			def result = isGoodResponse(response)
             log.debug "Got result: ${result}"            
             if (result == 0) {
