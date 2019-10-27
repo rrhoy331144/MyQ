@@ -132,7 +132,7 @@ def close() {
 	log.debug "Garage door close command called."
     parent.notify("Garage door close command called.")
 	parent.sendCommand(getMyQDeviceId(), "close")
-//	updateDeviceStatus("closing")			// Now handled in the parent (in case we have an Acceleration sensor, we can handle "waiting" state)
+	updateDeviceStatus("closing")			// Now handled in the parent (in case we have an Acceleration sensor, we can handle "waiting" state)
     runIn(30, refresh, [overwrite: true]) //Force a sync with tilt sensor after 30 seconds
 }
 

@@ -815,7 +815,7 @@ def sensorHandler(evt) {
     log.debug "Sensor change detected: Event name  " + evt.name + " value: " + evt.value   + " deviceID: " + evt.deviceId
 
     state.validatedDoors.each{ door ->
-        if (settings[state.data[door].sensor]?.id == evt.deviceId)
+        if (settings[state.data[door].sensor]?.id?.toInteger() == evt.deviceId)
             updateDoorStatus(state.data[door].child, settings[state.data[door].sensor], null)
     }
 }
