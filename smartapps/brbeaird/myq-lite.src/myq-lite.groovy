@@ -62,13 +62,11 @@ def mainPage() {
 
     //Brand new install (need to grab version info)
     if (!state.latestVersion){
-    	getVersionInfo(0, 0)
         state.currentVersion = [:]
         state.currentVersion['SmartApp'] = appVersion()
     }
     //Version updated
     else{
-        getVersionInfo(state.previousVersion, appVersion())
         state.previousVersion = appVersion()
     }
 
@@ -332,7 +330,6 @@ def updated() {
     if (logEnable) runIn(1800, logsOff)
 	if (logEnable) log.debug "MyQ Lite changes saved."
     unschedule()
-    runEvery3Hours(updateVersionInfo)   //Check for new version every 3 hours
 
     if (door1Sensor && state.validatedDoors){
     	refreshAll()
@@ -345,78 +342,7 @@ def updated() {
 
 //Called from scheduler every 3 hours
 def updateVersionInfo(){
-	getVersionInfo('versionCheck', appVersion())
 }
-
-//Get latest versions for SmartApp and Device Handlers
-def getVersionInfo(oldVersion, newVersion){
-    //Don't check for updates more 5 minutes
-
-    if (state.lastVersionCheck && oldVersion == newVersion && (now() - state.lastVersionCheck) / 1000/60 < 5 ){
-    	return
-    }
-    state.lastVersionCheck = now()
-    log.info "Checking for latest version..."
-    def params = [
-        uri:  'http://www.brbeaird.com/getVersion',
-        contentType: 'application/json',
-        body: [
-        	app: "myq",
-            platform: "ST",
-            prevVersion: oldVersion,
-            currentVersion: newVersion,
-        	sensor: door1Sensor ? true : false,
-            door: state.validatedDoors?.size(),
-            lock: prefUseLock ? true: false,
-            light: state.validatedLights?.size(),
-            button: prefDoor1PushButtons
-        ]
-    ]
-    def callbackMethod = oldVersion == 'versionCheck' ? 'updateCheck' : 'handleVersionUpdateResponse'
-    asynchttpGet(callbackMethod, params)
-}
-
-//When version response received (async), update state with the data
-def handleVersionUpdateResponse(response, data) {
-    if (response.hasError() || !response.json?.SmartApp) {
-        log.error "Error getting version info: ${response.errorMessage}"
-    }
-    else {state.latestVersion = response.json}
-}
-
-//In case of periodic update check, also refresh installed versions and update the version warning message
-def updateCheck(response, data) {
-	handleVersionUpdateResponse(response,data)
-    refreshChildren()
-    updateVersionMessage()
-}
-
-def updateVersionMessage(){
-	state.versionMsg = ""
-    state.currentVersion.each { device, version ->
-    	if (versionCompare(device) != 'latest'){
-        	state.versionMsg = "MyQ Lite Updates are available."
-    	}
-    }
-
-    //Notify if updates are available
-    if (state.versionMsg != ""){
-
-        //Send push notification if enabled
-        if (prefUpdateNotify){
-
-            //Don't notify if we've sent a notification within the last 1 day
-            if (state.lastVersionNotification){
-            	def timeSinceLastNotification = (now() - state.lastVersionNotification) / 1000
-                if (timeSinceLastNotification < 60*60*23){
-                	return
-                }
-            }
-            state.lastVersionNotification = now()
-    	}
-    }
-}
-
 
 def uninstall(){
     if (logEnable) log.debug "Removing MyQ Devices..."
@@ -432,7 +358,6 @@ def uninstall(){
 
 def uninstalled() {
 	if (logEnable) log.debug "MyQ removal complete."
-    getVersionInfo(state.previousVersion, 0);
 }
 
 
