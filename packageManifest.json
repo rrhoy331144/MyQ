@@ -1,0 +1,35 @@
+{
+  "packageName": "MyQ Garage Door Integration",
+  "author": "Jason Mok/Brian Beaird/Barry Burke/RBoy Apps/Dominick Meglio",
+  "minimumHEVersion": "2.1.9",
+  "dateReleased": "2020-04-10",
+  "apps": [
+    {
+      "id": "cccbc258-16d7-49fa-a32b-2d502f827e91",
+      "name": "MyQ Lite",
+      "namespace": "brbeaird",
+      "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-myq/master/smartapps/brbeaird/myq-lite.src/myq-lite.groovy",
+      "required": true,
+      "oauth": false,
+      "version": "3.1.1"
+    }
+  ],
+  "drivers": [
+    {
+      "id": "c793eb55-4cc4-414b-bc11-6d06b52f1584",
+      "name": "MyQ Garage Door Opener",
+      "namespace": "brbeaird",
+      "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-myq/master/devicetypes/brbeaird/myq-garage-door-opener.src/myq-garage-door-opener.groovy",
+      "required": true,
+      "version": "3.1.1"
+    },
+    {
+      "id": "10fadef0-b6f7-4a66-a08c-b660f5564560",
+      "name": "MyQ Garage Door Opener-NoSensor",
+      "namespace": "brbeaird",
+      "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-myq/master/devicetypes/brbeaird/myq-garage-door-opener-nosensor.src/myq-garage-door-opener-nosensor.groovy",
+      "required": false,
+      "version": "3.1.0"
+    }
+  ]
+}
