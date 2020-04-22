@@ -2,7 +2,9 @@
   "packageName": "MyQ Garage Door Integration",
   "author": "Jason Mok/Brian Beaird/Barry Burke/RBoy Apps/Dominick Meglio",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-04-10",
+  "dateReleased": "2020-04-22",
+  "documentationLink": "https://github.com/dcmeglio/hubitat-myq/blob/master/README.md",
+  "communityLink": "https://community.hubitat.com/t/updated-myq-lite-application/31318",
   "apps": [
     {
       "id": "cccbc258-16d7-49fa-a32b-2d502f827e91",
