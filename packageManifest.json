@@ -14,7 +14,8 @@
       "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-myq/master/smartapps/brbeaird/myq-lite.src/myq-lite.groovy",
       "required": true,
       "oauth": false,
-      "version": "3.1.3"
+      "version": "3.1.3",
+	  "primary": true
     }
   ],
   "drivers": [
