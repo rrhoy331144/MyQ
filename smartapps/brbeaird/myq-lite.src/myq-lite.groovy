@@ -1080,7 +1080,7 @@ def doUserNameAuth() {
                 "__RequestVerificationToken": token
             ]
         ]) { resp -> 
-            if (resp.status == 302) {
+            if (resp.status == 302 || resp.status == 200) {
                 location = resp.headers.Location
                 for (header in resp.headers) {
                     if (header.name == "Set-Cookie") {
