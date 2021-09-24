@@ -1026,6 +1026,7 @@ def splitUri(uri, htmlEncoded = false) {
 }
 
 def doUserNameAuth() {
+    def result = true
     try {
         def code = getPKCEVerifierCode()        
         def token = ""
@@ -1033,7 +1034,6 @@ def doUserNameAuth() {
         def location = ""
         def authCookie = ""
  
-        def result = true
         httpGet([ 
             uri: AUTH_HOSTNAME, 
             path: "/connect/authorize", 
