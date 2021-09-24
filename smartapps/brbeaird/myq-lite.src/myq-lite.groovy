@@ -1163,17 +1163,17 @@ def doRefreshTokenAuth() {
                     "grant_type": "refresh_token",
                     "redirect_uri": "com.myqops://ios",
                     "scope": "MyQ_Residential offline_access",
-                    "refresh_token": settings.session.refreshToken
+                    "refresh_token": state.session.refreshToken
                 ] 
             ]) { resp ->
                 if (resp.status == 200) {
-                    state.oauth.securityToken = response.data.access_token
-                    state.session.refreshToken = response.data.refresh_token
-                    state.session.expiration = now() + (response.data.expires_in * 1000) - 10000
+                    state.session.securityToken = resp.data.access_token
+                    state.session.refreshToken = resp.data.refresh_token
+                    state.session.expiration = now() + (resp.data.expires_in * 1000) - 10000
                     result = true
                 } else {
-                    log.error "Unknown LOGIN POST status: ${response.status} data: ${response.data}"
-                    state.loginMessage = "${response.status}-${response.data}"
+                    log.error "Unknown LOGIN POST status: ${resp.status} data: ${resp.data}"
+                    state.loginMessage = "${resp.status}-${resp.data}"
                     state.session.expiration = now() - 1000
                     result = false
                 }
