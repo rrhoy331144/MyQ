@@ -1089,7 +1089,7 @@ def doUserNameAuth() {
                 }
             }
             else {
-                log.error "Error loggign in: ${resp.status}"
+                log.error "Error logging in: ${resp.status}"
                 result = false
             }
         }
@@ -1110,8 +1110,10 @@ def doUserNameAuth() {
         ]) { resp ->
             if (resp.status == 302)
                 pkceResponse = resp.headers.Location
-            else
+            else {
+                log.error "Error validating PKCE code: ${resp.status}"
                 result = false
+            }
         }
         
         if (result == false)
@@ -1140,8 +1142,10 @@ def doUserNameAuth() {
                 state.session.refreshToken = resp.data.refresh_token
                 state.session.expiration = now() + (3600*1000) - 10000
             }
-            else
+            else {
+                log.error "Error retrieving auth token: ${resp.status}"
                 result = false
+            }
         }
     }
     catch (e) {
