@@ -24,6 +24,8 @@
  @Field CLIENT_SECRET = "UD4DXnKyPWq25BSw"
  @Field CLIENT_ID = "IOS_CGI_MYQ"
  @Field AUTH_HOSTNAME = "https://partner-identity.myq-cloud.com"
+ @Field COMMAND_HOSTNAME = "https://account-devices-gdo.myq-cloud.com"
+ @Field REDIRECT_URI = "com.myqops://ios"
 
 String appVersion() { return "3.1.3" }
 String appModified() { return "2020-07-03"}
@@ -95,15 +97,6 @@ def mainPage() {
         section("Connected Devices") {
         	paragraph title: "", "${devs?.size() ? devs?.join("\n") : "No MyQ Devices Connected"}"
             href "prefListDevices", title: "", description: "Tap to modify devices"
-        }
-        section("App and Handler Versions"){
-            state.currentVersion.each { device, version ->
-            	paragraph title: "", "${device} ${version} (${versionCompare(device)})"
-            }
-            href(name: "Release notes", title: "Release notes",
-             required: false,
-             url: "https://github.com/${gitBranch()}/SmartThings_MyQ/blob/master/CHANGELOG.md")
-            input "prefUpdateNotify", "bool", required: false, title: "Notify when new version is available"
         }
         section("Uninstall") {
             paragraph "Tap below to completely uninstall this SmartApp and devices (doors and lamp control devices will be force-removed from automations and SmartApps)"
@@ -826,7 +819,7 @@ private doLogin() {
         if (doRefreshTokenAuth())
             return true
         else {
-            state.session = [ brandID: 0, brandName: settings.brand, securityToken: null, expiration: 0 ]
+            state.session = [ brandID: 0, brandName: settings.brand, securityToken: null, refreshToken: null, expiration: 0 ]
             return doUserNameAuth()
         }
     }
@@ -876,17 +869,14 @@ private getMyQDevices() {
                 def doorState = device.state.door_state
                 def updatedTime = device.last_update
 
-            
-
                 //Ignore any doors with blank descriptions
                 if (description != ''){
                     if (logEnable) log.debug "Got valid door: ${description} type: ${device.device_family} status: ${doorState} type: ${device.device_type}"
                     //log.debug "Storing door info: " + description + "type: " + device.device_family + " status: " + doorState +  " type: " + device.device_type
                     state.MyQDataPending[dni] = [ status: doorState, lastAction: updatedTime, name: description, typeId: device.MyQDeviceTypeId, typeName: 'door', sensor: '', myQDeviceId: device.serial_number, myQAccountId: account.id]
                 }
-                else{
-                    if (logEnable) log.debug "Door " + device.MyQDeviceId + " has blank desc field. This is unusual..."
-                }
+                else if (logEnable) 
+                    log.debug "Door " + device.MyQDeviceId + " has blank desc field. This is unusual..."
             }
 
             //Lights
@@ -928,11 +918,15 @@ private apiPut(apiPath, apiBody = [], actionText = "") {
         log.error "Unable to complete PUT, login failed"
         return false
     }
+    def result = false
     try {
-        def result = false
-        httpPut([ uri: apiPath, headers: getMyQHeaders()]) { response ->
-            if (response.status != 200 && response.status != 204 && response.status != 202) {
-                log.warn "Unexpected command response - ${response.status} ${response.data}"
+        httpPut([ 
+                uri: COMMAND_HOSTNAME,
+                path: apiPath, 
+                headers: getMyQHeaders()
+            ]) { resp ->
+            if (resp.status != 200 && resp.status != 204 && resp.status != 202) {
+                log.warn "Unexpected command response - ${resp.status} ${resp.data}"
             }
             result = true
         }
@@ -951,12 +945,12 @@ def sendDoorCommand(myQDeviceId, myQAccountId, command) {
         myQAccountId = state.session.accountId  //Bandaid for people who haven't tapped through the modify menu yet to assign accountId to door device
     }
     state.lastCommandSent = now()
-    return apiPut("https://account-devices-gdo.myq-cloud.com/api/v5.2/Accounts/${myQAccountId}/door_openers/${myQDeviceId}/${command}")
+    return apiPut("/api/v5.2/Accounts/${myQAccountId}/door_openers/${myQDeviceId}/${command}")
 }
 
 def sendLampCommand(myQDeviceId, myQAccountId, command) {
 	state.lastCommandSent = now()
-    return apiPut("https://account-devices-lamp.myq-cloud.com/api/v5.2/Accounts/${myQAccountId}/lamps/${myQDeviceId}/${command}")
+    return apiPut("/api/v5.2/Accounts/${myQAccountId}/lamps/${myQDeviceId}/${command}")
 }
 
 //Transition for people who have not yet clicked through "modify devices" steps
@@ -1046,7 +1040,7 @@ def doUserNameAuth() {
                 code_challenge_method: "S256",
                 response_type: "code",
                 scope: "MyQ_Residential offline_access",
-                redirect_uri: "com.myqops://ios"
+                redirect_uri: REDIRECT_URI
             ],
             textParser: true
         ]) { resp ->            
@@ -1133,7 +1127,7 @@ def doUserNameAuth() {
                 code: pkceUrlParts.query.code,
                 code_verifier: code,
                 grant_type: "authorization_code",
-                redirect_uri: "com.myqops://ios",
+                redirect_uri: REDIRECT_URI,
                 scope: pkceUrlParts.query.scope
             ]
         ]) { resp -> 
@@ -1165,7 +1159,7 @@ def doRefreshTokenAuth() {
                     "client_id": CLIENT_ID,
                     "client_secret": CLIENT_SECRET,
                     "grant_type": "refresh_token",
-                    "redirect_uri": "com.myqops://ios",
+                    "redirect_uri": REDIRECT_URI,
                     "scope": "MyQ_Residential offline_access",
                     "refresh_token": state.session.refreshToken
                 ] 
