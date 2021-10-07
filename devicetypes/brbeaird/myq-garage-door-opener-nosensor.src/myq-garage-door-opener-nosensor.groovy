@@ -14,40 +14,42 @@
  *
  */
 metadata {
-	definition (name: "MyQ Garage Door Opener-NoSensor", namespace: "brbeaird", author: "Brian Beaird", vid: "generic-contact-4", ocfdevicetype: "oic.d.garagedoor", mnmn: "SmartThings") {
+	definition (name: "MyQ Garage Door Opener-NoSensor", namespace: "brbeaird", author: "Brian Beaird") {
 		capability "Door Control"
 		capability "Garage Door Control"
-		capability "Actuator"
-        //capability "Health Check" Will be needed eventually for new app compatability but is not documented well enough yet
-        
+        capability "Actuator"
+
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
         attribute "myQDeviceId", "string"
-        
+        attribute "myQAccountId", "string"
+
         command "open"
         command "close"
+        command "sendOpen"
+        command "sendClose"
         command "updateMyQDeviceId", ["string"]
 	}
 
 	simulator {	}
 
 	tiles {
-		
+
 		multiAttributeTile(name:"door", type: "lighting", width: 6, height: 4, canChangeIcon: false) {
 			tileAttribute ("device.door", key: "PRIMARY_CONTROL") {
-				attributeState "unknown", label:'MyQ Door (No sensor)', icon:"st.doors.garage.garage-closed",    backgroundColor:"#6495ED"				
-			}			
+				attributeState "unknown", label:'MyQ Door (No sensor)', icon:"st.doors.garage.garage-closed",    backgroundColor:"#6495ED"
+			}
 		}
-      
+
         standardTile("openBtn", "device.OpenButton", width: 3, height: 3) {
             state "normal", label: 'Open', icon: "st.doors.garage.garage-open", backgroundColor: "#e86d13", action: "open", nextState: "opening"
             state "opening", label: 'Opening', icon: "st.doors.garage.garage-opening", backgroundColor: "#cec236", action: "open"
 		}
-        standardTile("closeBtn", "device.CloseButton", width: 3, height: 3) {            
+        standardTile("closeBtn", "device.CloseButton", width: 3, height: 3) {
             state "normal", label: 'Close', icon: "st.doors.garage.garage-closed", backgroundColor: "#00a0dc", action: "close", nextState: "closing"
             state "closing", label: 'Closing', icon: "st.doors.garage.garage-closing", backgroundColor: "#cec236", action: "close"
 		}
-        
+
 		main "door"
 		details(["door", "openBtn", "closeBtn"])
 	}
@@ -55,52 +57,57 @@ metadata {
 
 def open()  {
     openPrep()
-    parent.sendCommand(getMyQDeviceId(), "open")
+    parent.sendDoorCommand(getMyQDeviceId(), getMyQAccountId(), "open")
 }
 def close() {
     closePrep()
-    parent.sendCommand(getMyQDeviceId(), "close")
+    parent.sendDoorCommand(getMyQDeviceId(), getMyQAccountId(), "close")
 }
 
 def openPrep(){
 	sendEvent(name: "door", value: "opening", descriptionText: "Open button pushed.", isStateChange: true, display: false, displayed: true)
-    log.debug "Opening!"
+    if (logEnable) log.debug "Opening!"
     runIn(20, resetToUnknown) //Reset to normal state after 20 seconds
 }
 
 def closePrep(){
 	sendEvent(name: "door", value: "closing", descriptionText: "Close button pushed.", isStateChange: true, display: false, displayed: true)
-    log.debug "Closing!"
+    if (logEnable) log.debug "Closing!"
     runIn(20, resetToUnknown)  //Reset to normal state after 20 seconds
 }
 
-
-
 def resetToUnknown(){
-	sendEvent(name: "door", value: "unknown", isStateChange: true, display: false, displayed: false)
-    sendEvent(name: "OpenButton", value: "normal", displayed: false, isStateChange: true)
-    sendEvent(name: "CloseButton", value: "normal", displayed: false, isStateChange: true)
+	sendEvent(name: "door", value: "closed", isStateChange: true, display: false, displayed: false)
 }
 
-def getMyQDeviceId(){	    
+def getMyQDeviceId(){
     if (device.currentState("myQDeviceId")?.value)
     	return device.currentState("myQDeviceId").value
-	else{    	
-        def newId = device.deviceNetworkId.split("\\|")[2]        
+	else{
+        def newId = device.deviceNetworkId.split("\\|")[2]
         sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
         return newId
-    }	
+    }
 }
 
-def updateMyQDeviceId(Id) {
-	log.debug "Setting MyQID to ${Id}"
+def getMyQAccountId(){
+    if (device.currentState("myQAccountId")?.value)
+    	return device.currentState("myQAccountId").value
+	else{
+        return parent.getDefaultAccountId()
+    }
+}
+
+def updateMyQDeviceId(Id, account) {
+	if (logEnable) log.debug "Setting MyQID to ${Id}, accountId to ${account}"
     sendEvent(name: "myQDeviceId", value: Id, display: true , displayed: true)
+    sendEvent(name: "myQAccountId", value: account, display: true , displayed: true)
 }
 
 def log(msg){
-	log.debug msg
+	if (logEnable)  log.debug msg
 }
 
 def showVersion(){
-	return "3.1.0"
+	return "4.0.1"
 }

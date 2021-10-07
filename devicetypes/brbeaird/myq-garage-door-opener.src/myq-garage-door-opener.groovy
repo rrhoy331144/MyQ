@@ -21,7 +21,7 @@
  *
  */
 metadata {
-	definition (name: "MyQ Garage Door Opener", namespace: "brbeaird", author: "Jason Mok/Brian Beaird/Barry Burke", vid: "generic-contact-4", ocfdevicetype: "oic.d.garagedoor", mnmn: "SmartThings") {
+	definition (name: "MyQ Garage Door Opener", namespace: "brbeaird", author: "Jason Mok/Brian Beaird/Barry Burke") {
 		capability "Door Control"
 		capability "Garage Door Control"
 		capability "Contact Sensor"
@@ -41,6 +41,7 @@ metadata {
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
         attribute "myQDeviceId", "string"
+		attribute "myQAccountId", "string"
 
 		command "updateDeviceStatus", ["string"]
 		command "updateDeviceLastActivity", ["number"]
@@ -101,15 +102,13 @@ metadata {
 	}
 }
 
-def on() { 	
-    if (logEnable) log.debug "Turning door on!"
-    open()
-    sendEvent(name: "switch", value: "on", isStateChange: true, display: true, displayed: true)
+def on() {
+    if (open())
+    	sendEvent(name: "switch", value: "on", isStateChange: true, display: true, displayed: true)
 }
-def off() { 	
-    if (logEnable) log.debug "Turning door off!"
-    close()    
-	sendEvent(name: "switch", value: "off", isStateChange: true, display: true, displayed: true)
+def off() {
+    if (close())
+		sendEvent(name: "switch", value: "off", isStateChange: true, display: true, displayed: true)
 }
 
 def push() {
@@ -122,20 +121,16 @@ def push() {
 	sendEvent(name: "momentary", value: "pushed", display: false, displayed: false, isStateChange: true)
 }
 
-def open()  { 
-	if (logEnable) log.debug "Garage door open command called."
+def open()  {
     parent.notify("Garage door open command called.")
-    updateDeviceStatus("opening")
-    parent.sendCommand(getMyQDeviceId(), "open")
-
+    if (parent.sendDoorCommand(getMyQDeviceId(), getMyQAccountId(), "open"))
+    	updateDeviceStatus("opening")
     runIn(20, refresh, [overwrite: true])	//Force a sync with tilt sensor after 20 seconds
 }
-
-def close() { 
-	if (logEnable) log.debug "Garage door close command called."
+def close() {
     parent.notify("Garage door close command called.")
-	parent.sendCommand(getMyQDeviceId(), "close")
-	updateDeviceStatus("closing")			// Now handled in the parent (in case we have an Acceleration sensor, we can handle "waiting" state)
+	parent.sendDoorCommand(getMyQDeviceId(), getMyQAccountId(), "close")
+//	updateDeviceStatus("closing")			// Now handled in the parent (in case we have an Acceleration sensor, we can handle "waiting" state)
     runIn(30, refresh, [overwrite: true]) //Force a sync with tilt sensor after 30 seconds
 }
 
@@ -146,6 +141,14 @@ def getMyQDeviceId(){
         def newId = device.deviceNetworkId.split("\\|")[2]
         sendEvent(name: "myQDeviceId", value: newId, display: true , displayed: true)
         return newId
+    }
+}
+
+def getMyQAccountId(){
+    if (device.currentState("myQAccountId")?.value)
+    	return device.currentState("myQAccountId").value
+	else{
+        return parent.getDefaultAccountId()
     }
 }
 
@@ -176,7 +179,7 @@ def updateDeviceStatus(status) {
     switch (status) {
 		case "open":
     		if (logEnable) log.debug "Door is now open"
-			sendEvent(name: "door", value: "open", display: true, isStateChange: true, descriptionText: device.displayName + " is open") 
+			sendEvent(name: "door", value: "open", display: true, isStateChange: true, descriptionText: device.displayName + " is open")
 			sendEvent(name: "contact", value: "open", display: false, displayed: false, isStateChange: true)	// make sure we update the hidden states as well
         	sendEvent(name: "switch", value: "on", display: false, displayed: false, isStateChange: true)		// on == open
             break
@@ -233,7 +236,7 @@ def updateDeviceSensor(sensor) {
 
 def updateSensorBattery(batteryValue) {
 	def newBattery = batteryValue
-    if (!batteryValue){
+    if (!batteryValue || batteryValue == 1){
     	newBattery = 100
     }
     sendEvent(name: "battery", value: newBattery, display: true, displayed: true)
@@ -243,15 +246,16 @@ def updateDeviceMoving(moving) {
 	sendEvent(name: "doorMoving", value: moving, display: false , displayed: false)
 }
 
-def updateMyQDeviceId(Id) {
-	if (logEnable) log.debug "Setting MyQID to ${Id}"
+def updateMyQDeviceId(Id, account) {
+	if (logEnable) log.debug "Setting MyQID to ${Id}, accountId to ${account}"
     sendEvent(name: "myQDeviceId", value: Id, display: true , displayed: true)
+    sendEvent(name: "myQAccountId", value: account, display: true , displayed: true)
 }
 
 def log(msg){
-	if (logEnable) log.debug msg
+	log.debug msg
 }
 
 def showVersion(){
-	return "3.1.1"
+	return "4.0.1"
 }
