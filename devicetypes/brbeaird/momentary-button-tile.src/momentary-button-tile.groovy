@@ -39,14 +39,17 @@ metadata {
 	}
 }
 
-def parse(description) {
+def parse(String description) {
+}
+
+def push() {	
+	sendEvent(name: "momentary", value: "pushed", isStateChange: true)
 }
 
 def on() {
-    sendEvent(name: "switch", value: "on", isStateChange: true)
+	push()
 }
 
 def off() {
-    sendEvent(name: "switch", value: "off", isStateChange: true)
+	sendEvent(name: "switch", value: "off", isStateChange: true)
 }
-
